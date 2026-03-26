@@ -1,0 +1,325 @@
+﻿@page "/devices"
+@using BlazorApp_Manage.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+
+@attribute [Authorize]
+@inject IDbContextFactory<WebAppManageContext> DbFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JsRuntime
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold text-primary"><i class="bi bi-cpu-fill"></i> Quản lý thiết bị mạng</h3>
+
+        <AuthorizeView Roles="Admin,Technician">
+            <Authorized>
+                <button class="btn btn-primary shadow-sm px-4" @onclick="() => OpenModal()">
+                    <i class="bi bi-plus-circle-fill"></i> Thêm thiết bị mới
+                </button>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+
+    @if (devices == null)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else
+    {
+        <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Tên thiết bị</th>
+                            <th>Loại thiết bị</th>
+                            <th>Tòa nhà</th>
+                            <th>Tầng</th>
+                            <th>Phòng</th>
+                            <th>Tủ Rack</th>
+                            <th>Trạng thái</th>
+                            <th class="text-center">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in devices)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="fw-bold">@d.DeviceName</span><br />
+                                    <small class="text-muted">SN: @d.SerialNumber</small>
+                                </td>
+                                <td><span class="badge bg-info-subtle text-dark border border-info">@d.DeviceType?.TypeName</span></td>
+                                <td>@d.Location?.Building</td>
+                                <td>@d.Location?.Floor</td>
+                                <td>@d.Location?.Room</td>
+                                <td class="text-primary fw-bold">@d.Location?.Rack</td>
+                                <td>
+                                    <span class="badge @(d.Status == "Online" ? "bg-success" : "bg-secondary")">
+                                        @(d.Status == "Online" ? "● Online" : "○ Offline")
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <AuthorizeView Roles="Admin,Technician">
+                                        <Authorized>
+                                            <div class="btn-group shadow-sm">
+                                                @* Nút Check Status *@
+                                                <button class="btn btn-sm btn-outline-info" title="Kiểm tra kết nối (On/Off)" @onclick="() => CheckStatus(d)">
+                                                    <i class="bi bi-broadcast"></i>
+                                                </button>
+                                                @* Nút Chỉnh sửa *@
+                                                <button class="btn btn-sm btn-warning ms-1 text-white" title="Chỉnh sửa thiết bị" @onclick="() => OpenModal(d)">
+                                                    <i class="bi bi-pencil-square"></i>
+                                                </button>
+                                                @* Nút Xóa *@
+                                                <button class="btn btn-sm btn-danger ms-1" title="Xóa thiết bị" @onclick="() => DeleteDevice(d)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </Authorized>
+                                    </AuthorizeView>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @* --- MODAL GIỮ NGUYÊN NHƯ BẢN CŨ CỦA UY --- *@
+    @if (showModal)
+    {
+        <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(3px);">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title fw-bold">
+                            <i class="bi @(currentDevice.DeviceId == 0 ? "bi-plus-circle" : "bi-pencil-square")"></i>
+                            @(currentDevice.DeviceId == 0 ? "Thêm thiết bị mới" : "Chỉnh sửa thiết bị")
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
+                    </div>
+
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-uppercase">Tên thiết bị</label>
+                                <input class="form-control shadow-sm" @bind="currentDevice.DeviceName" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-uppercase">Số Serial (SN) <span class="text-muted fw-normal">(Tùy chọn)</span></label>
+                                <input class="form-control shadow-sm bg-light" @bind="currentDevice.SerialNumber" placeholder="Để trống nếu không có" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-uppercase">Địa chỉ MAC <span class="text-muted fw-normal">(Tùy chọn)</span></label>
+                                <input class="form-control shadow-sm bg-light" @bind="currentDevice.Macaddress" placeholder="Để trống nếu không có" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-uppercase">Loại thiết bị</label>
+                                <select class="form-select shadow-sm" @bind="currentDevice.DeviceTypeId">
+                                    @foreach (var t in deviceTypes)
+                                    {
+                                        <option value="@t.TypeId">@t.TypeName</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-uppercase">Khu vực (ID)</label>
+                                <select class="form-select shadow-sm" @onchange="OnLocationChanged">
+                                    @foreach (var l in locations)
+                                    {
+                                        <option value="@l.LocationId" selected="@(l.LocationId == currentDevice.LocationId)">@l.Building - @l.Room</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-12 hr-label mt-3">
+                                <hr />
+                                <span class="badge bg-secondary mb-2">Chi tiết vị trí lắp đặt (Từ bảng Location)</span>
+                            </div>
+
+                            @if (currentDevice.Location != null)
+                            {
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold small">Tòa nhà</label>
+                                    <input class="form-control bg-light" @bind="currentDevice.Location.Building" readonly />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold small">Tầng</label>
+                                    <input class="form-control" @bind="currentDevice.Location.Floor" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold small">Phòng</label>
+                                    <input class="form-control" @bind="currentDevice.Location.Room" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold small">Tủ Rack / Vị trí U</label>
+                                    <input class="form-control" @bind="currentDevice.Location.Rack" />
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="modal-footer bg-light">
+                        <button class="btn btn-outline-secondary px-4 shadow-sm" @onclick="CloseModal">Hủy bỏ</button>
+                        <button class="btn btn-primary px-4 shadow" @onclick="SaveDevice">
+                            <i class="bi bi-save"></i> Lưu thông tin
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Device>? devices;
+    private List<DeviceType> deviceTypes = new();
+    private List<Location> locations = new();
+    private Device currentDevice = new();
+    private bool showModal = false;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        devices = await context.Devices
+            .Include(d => d.DeviceType)
+            .Include(d => d.Location)
+            .OrderByDescending(d => d.CreatedDate)
+            .ToListAsync();
+
+        deviceTypes = await context.DeviceTypes.ToListAsync();
+        locations = await context.Locations.ToListAsync();
+    }
+
+    private void OpenModal(Device? d = null)
+    {
+        if (d == null)
+        {
+            currentDevice = new Device { Status = "Offline", CreatedDate = DateTime.Now };
+            if (deviceTypes.Any()) currentDevice.DeviceTypeId = deviceTypes.First().TypeId;
+            if (locations.Any())
+            {
+                currentDevice.LocationId = locations.First().LocationId;
+                currentDevice.Location = locations.First();
+            }
+        }
+        else
+        {
+            currentDevice = d;
+        }
+        showModal = true;
+    }
+
+    private void OnLocationChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int locId))
+        {
+            currentDevice.LocationId = locId;
+            currentDevice.Location = locations.FirstOrDefault(l => l.LocationId == locId);
+        }
+    }
+
+    private async Task SaveDevice()
+    {
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            bool isNew = currentDevice.DeviceId == 0;
+
+            // Ngắt kết nối để tránh lỗi Identity
+            currentDevice.DeviceType = null;
+            currentDevice.Location = null;
+
+            if (isNew)
+            {
+                // Tự sinh Serial nếu trống
+                if (string.IsNullOrEmpty(currentDevice.SerialNumber))
+                    currentDevice.SerialNumber = "SN-" + DateTime.Now.Ticks.ToString().Substring(10);
+
+                // XỬ LÝ MAC ADDRESS: Nếu để trống, tạo một mã ngẫu nhiên duy nhất
+                if (string.IsNullOrEmpty(currentDevice.Macaddress))
+                {
+                    currentDevice.Macaddress = "GEN-" + Guid.NewGuid().ToString().Substring(0, 8).ToUpper();
+                }
+
+                currentDevice.CreatedDate = DateTime.Now;
+                context.Devices.Add(currentDevice);
+            }
+            else
+            {
+                context.Devices.Update(currentDevice);
+            }
+
+            await WriteLog(context, isNew ? "ADD_DEVICE" : "UPDATE_DEVICE",
+                           $"{(isNew ? "Thêm" : "Cập nhật")} thiết bị: {currentDevice.DeviceName}");
+
+            await context.SaveChangesAsync();
+            showModal = false;
+            await LoadData();
+            await JsRuntime.InvokeVoidAsync("alert", "Lưu thành công!");
+        }
+        catch (Exception ex)
+        {
+            var msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+            await JsRuntime.InvokeVoidAsync("alert", "Lỗi: " + msg);
+        }
+    }
+
+    // CHỈ GIỮ LẠI MỘT HÀM DELETE DUY NHẤT ĐÃ ĐƯỢC TỐI ƯU
+    private async Task DeleteDevice(Device d)
+    {
+        bool confirmed = await JsRuntime.InvokeAsync<bool>("confirm", $"Xóa thiết bị {d.DeviceName}? Dữ liệu log liên quan sẽ bị xóa.");
+        if (!confirmed) return;
+
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+
+            // Xóa thủ công ActionLogs liên quan (Vì Database không có CASCADE cho bảng này)
+            var relatedLogs = await context.ActionLogs.Where(l => l.DeviceId == d.DeviceId).ToListAsync();
+            if (relatedLogs.Any()) context.ActionLogs.RemoveRange(relatedLogs);
+
+            // Xóa thiết bị (NetworkConfigs tự xóa nhờ CASCADE)
+            context.Devices.Remove(d);
+
+            await WriteLog(context, "DELETE_DEVICE", $"Đã xóa thiết bị: {d.DeviceName}");
+            await context.SaveChangesAsync();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            var msg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+            await JsRuntime.InvokeVoidAsync("alert", "Lỗi xóa: " + msg);
+        }
+    }
+
+    private async Task WriteLog(WebAppManageContext context, string actionType, string description)
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var username = authState.User.Identity?.Name;
+        if (!string.IsNullOrEmpty(username))
+        {
+            var user = await context.Accounts.FirstOrDefaultAsync(a => a.Username == username);
+            if (user != null)
+            {
+                context.ActionLogs.Add(new ActionLog { AccountId = user.AccountId, ActionType = actionType, Description = description, LogTime = DateTime.Now });
+            }
+        }
+    }
+
+    private async Task CheckStatus(Device d)
+    {
+        d.Status = (new Random().Next(0, 2) == 0) ? "Online" : "Offline";
+        using var context = await DbFactory.CreateDbContextAsync();
+        context.Devices.Update(d);
+        await context.SaveChangesAsync();
+    }
+
+    private void CloseModal() => showModal = false;
+}

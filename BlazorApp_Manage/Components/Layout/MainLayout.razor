@@ -1,0 +1,215 @@
+﻿
+
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using BlazorApp_Manage.Auth
+@using BlazorApp_Manage.Data
+@using Microsoft.EntityFrameworkCore
+@inject NavigationManager nav
+@inject AuthenticationStateProvider AuthStateProvider
+@* 1. Tiêm DbFactory để ghi log vào SQL *@
+@inject IDbContextFactory<WebAppManageContext> DbFactory
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <!-- thanh tim kim -->
+        <div class="top-row px-4 d-flex justify-content-between align-items-center">
+
+            <div class="input-group" style="width: 300px;">
+                <input type="text"
+                       class="form-control"
+                       placeholder="Tìm thiết bị..."
+                       @bind="searchText"
+                       @bind:event="oninput"
+                       @onkeypress="HandleKeyPress" />
+                <button class="btn btn-outline-secondary" @onclick="HandleSearch">
+                    🔍
+                </button>
+            </div>
+
+            <!-- login -->
+            <AuthorizeView>
+                <Authorized Context="authContext">
+                    <span class="fw-bold text-primary">
+                        👤 Chào, @authContext.User.Identity?.Name
+                    </span>
+                    <button class="btn btn-sm btn-danger ms-2" @onclick="HandleLogout">Đăng xuất</button>
+                </Authorized>
+                <NotAuthorized>
+                    <NavLink class="btn btn-warning fw-bold" href="/login">🔐 Đăng nhập</NavLink>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+
+        <!-- xem log doi voi admin -->
+
+        <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+            <nav class="flex-column">
+                @* Menu ai cũng thấy *@
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                        <span class="bi bi-house-door-fill" aria-hidden="true"></span> 
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="devices">
+                        <span class="bi bi-cpu-fill" aria-hidden="true"></span>
+                    </NavLink>
+                </div>
+
+                @* CHỈ ADMIN MỚI THẤY MENU NÀY *@
+                <AuthorizeView Roles="Admin">
+                    <Authorized>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="logs">
+                                <span class="bi bi-list-ul" aria-hidden="true"></span>
+                            </NavLink>
+                        </div>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="users">
+                                <span class="bi bi-people-fill" aria-hidden="true"></span>
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+            </nav>
+        </div>
+        <article class="content px-4">
+            @Body
+        </article>
+        <!--Footer-->
+        <footer class="bg-light pt-5 pb-2 border-top mt-5">
+            <div class="container-fluid px-4">
+                <div class="row g-4">
+                    <div class="col-lg-3 col-md-6">
+                        <h6 class="fw-bold text-uppercase border-bottom border-warning border-3 d-inline-block pb-1 mb-3">Liên hệ</h6>
+                        <p class="small text-muted mb-2">Hệ thống Quản lý Hạ tầng - Trung tâm Chuyển đổi số tỉnh Đồng Tháp.</p>
+                        <div class="small">
+                            <p class="mb-1 text-dark"><strong>Địa chỉ:</strong> Số 377A Hùng Vương, Phường Đạo Thạnh, TP. Mỹ Tho, Tiền Giang</p>
+                            <p class="mb-1 text-dark"><strong>Hỗ trợ kỹ thuật:</strong> <span class="text-primary">.......</span></p>
+                        </div>
+                        <div class="d-flex gap-2 mt-3">
+                            <a href="#" class="btn btn-sm btn-outline-secondary rounded-circle"><i class="bi bi-facebook"></i></a>
+                            <a href="#" class="btn btn-sm btn-outline-secondary rounded-circle"><i class="bi bi-envelope-fill"></i></a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-3 col-md-6">
+                        <h6 class="fw-bold text-uppercase border-bottom border-primary border-3 d-inline-block pb-1 mb-3">Thiết bị</h6>
+                        <ul class="list-unstyled small">
+                            <li class="mb-2"><a href="devices" class="text-decoration-none text-muted">▪ Thiết bị Router</a></li>
+                            <li class="mb-2"><a href="devices" class="text-decoration-none text-muted">▪ Thiết bị Switch</a></li>
+                            <li class="mb-2"><a href="devices" class="text-decoration-none text-muted">▪ Server Vật lý</a></li>
+                            <li class="mb-2"><a href="network-config" class="text-decoration-none text-muted">▪ Cấu hình IP/VLAN</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="col-lg-3 col-md-6">
+                        <h6 class="fw-bold text-uppercase border-bottom border-info border-3 d-inline-block pb-1 mb-3">Chính sách</h6>
+                        <ul class="list-unstyled small">
+                            <li class="mb-2"><a href="#" class="text-decoration-none text-muted">▪ Hướng dẫn sử dụng</a></li>
+                            <li class="mb-2"><a href="#" class="text-decoration-none text-muted">▪ Chính sách bảo mật</a></li>
+                            <li class="mb-2"><a href="#" class="text-decoration-none text-muted">▪ Quy trình bảo trì</a></li>
+                            <li class="mb-2"><a href="#" class="text-decoration-none text-muted">▪ Báo cáo sự cố mạng</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="col-lg-3 col-md-6">
+                        <h6 class="fw-bold text-uppercase border-bottom border-danger border-3 d-inline-block pb-1 mb-3">Vị trí hệ thống</h6>
+                        <div class="rounded overflow-hidden shadow-sm border" style="height: 150px;">
+                            <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3924.3418844855!2d106.3644083!3d10.370335!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x310aef913af14f5%3A0x6cb60b8bf8b6f870!2zMzc3QSBIw7luZyBWxrDGoW5nLCDEkOG6oW8gVGjhuqFuaCwgTeG7uSBUaG8sIFRp4buBbiBHaWFuZw!5e0!3m2!1svi!2s!4v1711424567890!5m2!1svi!2s"
+                                    width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <div class="row align-items-center">
+                    <div class="col-md-6 text-muted small">
+                        © 2026 Copyright by <strong>NIM System</strong>. All rights reserved. Thiết kế bởi <strong>.....</strong>
+                    </div>
+                    <div class="col-md-6 text-end text-muted small">
+                        Hôm nay: <strong>@DateTime.Now.ToString("dd/MM/yyyy")</strong>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    string searchText = "";
+
+    void HandleSearch()
+    {
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            nav.NavigateTo($"/devices?search={searchText}");
+        }
+    }
+
+    void HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            HandleSearch();
+        }
+    }
+
+    // Hàm xử lý đăng xuất đã được thêm Ghi Log
+    private async Task HandleLogout()
+    {
+        // 2. Lấy thông tin User hiện tại TRƯỚC khi logout
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity is { IsAuthenticated: true })
+        {
+            try
+            {
+                var username = user.Identity.Name;
+                using var context = await DbFactory.CreateDbContextAsync();
+
+                // Tìm Account dựa trên Username để lấy ID
+                var account = await context.Accounts.FirstOrDefaultAsync(a => a.Username == username);
+
+                if (account != null)
+                {
+                    // 3. Ghi log "LOGOUT" vào Database
+                    context.ActionLogs.Add(new ActionLog
+                    {
+                        AccountId = account.AccountId,
+                        ActionType = "LOGOUT",
+                        Description = $"User {username} đã đăng xuất khỏi hệ thống.",
+                        LogTime = DateTime.Now
+                    });
+                    await context.SaveChangesAsync();
+                    Console.WriteLine($"[LOG - Logout]: Đã ghi log cho {username}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[LỖI GHI LOG]: {ex.Message}");
+            }
+        }
+
+        // 4. Xóa sạch Session và quay về trang Login
+        var customAuthStateProvider = (CustomAuthStateProvider)AuthStateProvider;
+        await customAuthStateProvider.UpdateAuthenticationState(null);
+        nav.NavigateTo("/login", forceLoad: true);
+    }
+
+}

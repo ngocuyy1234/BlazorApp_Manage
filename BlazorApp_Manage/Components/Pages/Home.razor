@@ -1,0 +1,272 @@
+﻿
+@page "/"
+@using BlazorApp_Manage.Data
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<WebAppManageContext> DbFactory
+
+<PageTitle>Dashboard - Quản lý mạng</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="fw-bold text-dark m-0">Hệ thống quản lý thiết bị mạng</h1>
+            <p class="text-muted mb-0">Chào mừng bạn trở lại, hệ thống đang hoạt động ổn định.</p>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-5">
+        <div class="col-md-3">
+            <div class="stat-card p-3 bg-gradient-blue text-white rounded-4 shadow border-0">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="small text-uppercase opacity-75">Tổng thiết bị</div>
+                        <h2 class="fw-bold mb-0">@totalDevices</h2>
+                    </div>
+                    <div class="icon-shape"><i class="bi bi-cpu"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card p-3 bg-gradient-green text-white rounded-4 shadow border-0">
+                <div class="d-flex justify-content-between">
+                    <div icon-shape icon-online>
+                        <div class="small text-uppercase opacity-75">Đang Online</div>
+                        <h2 class="fw-bold mb-0">@onlineDevices</h2>
+                    </div>
+                    <div class="icon-shape"><i class="fa-solid fa-circle-check"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card p-3 bg-gradient-red text-white rounded-4 shadow border-0">
+                <div class="d-flex justify-content-between">
+                    <divicon-shape icon-offline>
+                        <div class="small text-uppercase opacity-75">Mất kết nối</div>
+                        <h2 class="fw-bold mb-0">@offlineDevices</h2>
+                    </divicon-shape>
+                    <div class="icon-shape"><i class="fa-solid fa-circle-xmark"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card p-3 bg-gradient-orange text-white rounded-4 shadow border-0">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="small text-uppercase opacity-75">Nhân sự</div>
+                        <h2 class="fw-bold mb-0">@totalUsers</h2>
+                    </div>
+                    <div class="icon-shape"><i class="bi bi-people"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h5 class="fw-bold mb-4 text-secondary text-uppercase small" style="letter-spacing: 1px;">Truy cập nhanh hệ thống</h5>
+
+    <div class="row g-4 justify-content-center">
+        <div class="col-md-3">
+            <NavLink href="devices" class="text-decoration-none">
+                <div class="card h-100 border-0 shadow-sm custom-card card-blue py-4 rounded-4">
+                    <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                        <div class="icon-circle bg-blue-light text-blue mb-3">🖥️</div>
+                        <h6 class="fw-bold text-dark mb-1">Thiết bị</h6>
+                        <p class="text-muted small mb-0">Hệ thống phần cứng</p>
+                    </div>
+                </div>
+            </NavLink>
+        </div>
+
+        <div class="col-md-3">
+            <NavLink href="network-config" class="text-decoration-none shadow-hover">
+                <div class="card h-100 border-0 shadow-sm custom-card card-green py-4 rounded-4">
+                    <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                        <div class="icon-circle bg-green-light text-green mb-3">🌐</div>
+                        <h6 class="fw-bold text-dark mb-1">Cấu hình Mạng</h6>
+                        <p class="text-muted small mb-0">VLAN & Địa chỉ IP</p>
+                    </div>
+                </div>
+            </NavLink>
+        </div>
+
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <div class="col-md-3">
+                    <NavLink href="users" class="text-decoration-none">
+                        <div class="card h-100 border-0 shadow-sm custom-card card-orange py-4 rounded-4">
+                            <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                                <div class="icon-circle bg-orange-light text-orange mb-3">👥</div>
+                                <h6 class="fw-bold text-dark mb-1">Nhân sự</h6>
+                                <p class="text-muted small mb-0">Tài khoản & Phân quyền</p>
+                            </div>
+                        </div>
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <div class="col-md-3">
+                    <NavLink href="logs" class="text-decoration-none">
+                        <div class="card h-100 border-0 shadow-sm custom-card card-purple py-4 rounded-4">
+                            <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                                <div class="icon-circle bg-purple-light text-purple mb-3">📝</div>
+                                <h6 class="fw-bold text-dark mb-1">Nhật ký</h6>
+                                <p class="text-muted small mb-0">Lịch sử hoạt động</p>
+                            </div>
+                        </div>
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+</div>
+<style>
+    :root {
+    
+        --blue-main: #0d6efd;
+        --blue-bg: #e7f1ff;
+        --blue-soft: #f0f7ff;
+        --green-main: #198754;
+        --green-bg: #e6f3ec;
+        --green-soft: #f2faf5;
+        --purple-main: #6f42c1;
+        --purple-bg: #f1e9ff;
+        --purple-soft: #f6f2ff;
+        --orange-main: #fd7e14;
+        --orange-bg: #fff5eb;
+        --orange-soft: #fff9f5;
+        --red-main: #dc3545;
+    }
+
+    .bg-gradient-blue {
+        background: linear-gradient(45deg, #0d6efd, #0dcaf0);
+    }
+
+    .bg-gradient-green {
+        background: linear-gradient(45deg, #198754, #20c997);
+    }
+
+    .bg-gradient-red {
+        background: linear-gradient(45deg, #dc3545, #f86d7d);
+    }
+
+    .bg-gradient-orange {
+        background: linear-gradient(45deg, #fd7e14, #ffc107);
+    }
+
+    .icon-shape {
+        width: 45px !important;
+        height: 45px !important;
+        background: rgba(255, 255, 255, 0.25);
+        border-radius: 50% !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+    }
+
+    .bg-gradient-green .icon-shape i {
+        color: #adffad !important;
+        filter: drop-shadow(0 0 5px #adffad);
+    }
+
+    .bg-gradient-red .icon-shape i {
+        color: #ffcccc !important;
+        filter: drop-shadow(0 0 5px #ffcccc);
+    }
+
+    .custom-card {
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        border: 1px solid rgba(0,0,0,0.05) !important;
+    }
+
+        .custom-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important;
+        }
+
+    .card-blue {
+        background-color: var(--blue-soft) !important;
+        border-top: 5px solid var(--blue-main) !important;
+    }
+
+    .card-green {
+        background-color: var(--green-soft) !important;
+        border-top: 5px solid var(--green-main) !important;
+    }
+
+    .card-purple {
+        background-color: var(--purple-soft) !important;
+        border-top: 5px solid var(--purple-main) !important;
+    }
+
+    .card-orange {
+        background-color: var(--orange-soft) !important;
+        border-top: 5px solid var(--orange-main) !important;
+    }
+
+    .icon-circle {
+        width: 80px !important;
+        height: 80px !important;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50% !important;
+        background-color: white !important;
+        font-size: 2.2rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+
+    .card-blue:hover .icon-circle {
+        background-color: var(--blue-main) !important;
+        color: white !important;
+    }
+
+    .card-green:hover .icon-circle {
+        background-color: var(--green-main) !important;
+        color: white !important;
+    }
+
+    .card-purple:hover .icon-circle {
+        background-color: var(--purple-main) !important;
+        color: white !important;
+    }
+
+    .card-orange:hover .icon-circle {
+        background-color: var(--orange-main) !important;
+        color: white !important;
+    }
+
+    .text-blue {
+        color: var(--blue-main) !important;
+    }
+
+    .text-green {
+        color: var(--green-main) !important;
+    }
+
+    .text-purple {
+        color: var(--purple-main) !important;
+    }
+
+    .text-orange {
+        color: var(--orange-main) !important;
+    }
+</style>
+
+@code {
+    private int totalDevices, onlineDevices, offlineDevices, totalUsers;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        totalDevices = await context.Devices.CountAsync();
+        onlineDevices = await context.Devices.CountAsync(d => d.Status == "Online");
+        offlineDevices = await context.Devices.CountAsync(d => d.Status == "Offline");
+        totalUsers = await context.Accounts.CountAsync();
+    }
+}

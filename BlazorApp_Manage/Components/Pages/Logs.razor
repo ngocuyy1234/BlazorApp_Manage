@@ -1,0 +1,119 @@
+﻿@page "/logs"
+@using BlazorApp_Manage.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+@inject IDbContextFactory<WebAppManageContext> DbFactory
+
+<PageTitle>Nhật ký hoạt động</PageTitle>
+
+<div class="container-fluid">
+    <h3 class="mb-4">📋 Nhật ký hoạt động hệ thống</h3>
+
+    @* Thanh bộ lọc *@
+    <div class="row mb-3 g-3">
+        <div class="col-md-4">
+            <input type="text" class="form-control" placeholder="Tìm theo tên người dùng..." 
+                   @bind="searchUser" @bind:event="oninput" @onkeyup="LoadLogs" />
+        </div>
+        <div class="col-md-3">
+            <input type="date" class="form-control" @bind="fromDate" @bind:after="LoadLogs" />
+        </div>
+        <div class="col-md-3">
+            <input type="date" class="form-control" @bind="toDate" @bind:after="LoadLogs" />
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-secondary w-100" @onclick="ResetFilter">Đặt lại</button>
+        </div>
+    </div>
+
+    @if (logs == null)
+    {
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p>Đang tải dữ liệu...</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive shadow-sm">
+            <table class="table table-hover table-bordered bg-white">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Thời gian</th>
+                        <th>Người dùng</th>
+                        <th>Hành động</th>
+                        <th>Chi tiết</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var log in logs)
+                    {
+                        <tr>
+                            <td>@(log.LogTime?.ToString("dd/MM/yyyy HH:mm:ss") ?? "N/A")</td>
+                            <td><span class="badge bg-info text-dark">@log.Account?.Username</span></td>
+                            <td>
+                                <span class="badge @(log.ActionType == "LOGIN" ? "bg-success" : 
+                                                    log.ActionType == "LOGOUT" ? "bg-warning text-dark" : "bg-primary")">
+                                    @log.ActionType
+                                </span>
+                            </td>
+                            <td>@log.Description</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ActionLog>? logs;
+    private string searchUser = "";
+    private DateTime? fromDate;
+    private DateTime? toDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLogs();
+    }
+
+    private async Task LoadLogs()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        
+        var query = context.ActionLogs
+            .Include(l => l.Account) // Join với bảng Account để lấy Username
+            .AsQueryable();
+
+        // Lọc theo tên người dùng
+        if (!string.IsNullOrWhiteSpace(searchUser))
+        {
+            query = query.Where(l => l.Account.Username.Contains(searchUser));
+        }
+
+        // Lọc theo ngày bắt đầu
+        if (fromDate.HasValue)
+        {
+            query = query.Where(l => l.LogTime >= fromDate.Value);
+        }
+
+        // Lọc theo ngày kết thúc
+        if (toDate.HasValue)
+        {
+            // Cộng thêm 1 ngày để lấy hết dữ liệu của ngày đó
+            var endLimit = toDate.Value.AddDays(1);
+            query = query.Where(l => l.LogTime < endLimit);
+        }
+
+        logs = await query.OrderByDescending(l => l.LogTime).ToListAsync();
+    }
+
+    private async Task ResetFilter()
+    {
+        searchUser = "";
+        fromDate = null;
+        toDate = null;
+        await LoadLogs();
+    }
+}

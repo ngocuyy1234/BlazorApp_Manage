@@ -1,0 +1,224 @@
+﻿@page "/users"
+@using BlazorApp_Manage.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+@inject IDbContextFactory<WebAppManageContext> DbFactory
+
+<PageTitle>Quản lý người dùng</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold"><i class="bi bi-people"></i> Quản lý Nhân sự</h2>
+        <button class="btn btn-primary shadow-sm" @onclick="() => showModal = true">
+            <i class="bi bi-person-plus"></i> Thêm tài khoản cấp dưới
+        </button>
+    </div>
+
+    @if (users == null)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p>Đang tải danh sách...</p>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm border-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Tên đăng nhập</th>
+                            <th>Họ và Tên</th>
+                            <th>Quyền hạn</th>
+                            <th>Trạng thái</th>
+                            <th class="text-center">Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var u in users)
+                        {
+                            <tr>
+                                <td><strong>@u.Username</strong></td>
+                                <td>@u.FullName</td>
+                                <td>
+                                    <select class="form-select form-select-sm w-auto" @onchange="(e) => UpdateRole(u, e)">
+                                        @foreach (var r in roles)
+                                        {
+                                            <option value="@r.RoleId" selected="@(u.RoleId == r.RoleId)">@r.RoleName</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    <span class="badge rounded-pill @((u.IsActive ?? false) ? "bg-success" : "bg-danger")">
+                                        @((u.IsActive ?? false) ? "Đang hoạt động" : "Đã khóa")
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-outline-warning me-1" @onclick="() => ResetPassword(u)">
+                                        🔑 Reset Pass
+                                    </button>
+                                    <button class="btn btn-sm @((u.IsActive ?? false) ? "btn-outline-danger" : "btn-outline-success")"
+                                            @onclick="() => ToggleStatus(u)">
+                                        <i class="bi @((u.IsActive ?? false) ? "bi-lock" : "bi-unlock")"></i>
+                                        @((u.IsActive ?? false) ? "Khóa" : "Mở")
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@* MODAL TẠO USER MỚI (Admin tạo cho Tech/Viewer) *@
+@if (showModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Tạo tài khoản mới</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => showModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Tên đăng nhập:</label>
+                        <input class="form-control" @bind="newUser.Username" placeholder="Ví dụ: tech_uy" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Họ tên:</label>
+                        <input class="form-control" @bind="newUser.FullName" placeholder="Nguyễn Văn A" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cấp bậc:</label>
+                        <select class="form-select" @bind="newUser.RoleId">
+                            @foreach (var r in roles) { <option value="@r.RoleId">@r.RoleName</option> }
+                        </select>
+                    </div>
+                    <p class="text-muted small"><em>* Mật khẩu mặc định sẽ là: <strong>123456</strong></em></p>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button class="btn btn-secondary" @onclick="() => showModal = false">Hủy</button>
+                    <button class="btn btn-primary" @onclick="AddUser">Lưu tài khoản</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Account>? users;
+    private List<Role> roles = new();
+    private bool showModal = false;
+    private Account newUser = new() { RoleId = 2, IsActive = true };
+    @inject AuthenticationStateProvider AuthStateProvider
+    protected override async Task OnInitializedAsync() => await LoadData();
+    @inject IJSRuntime JsRuntime
+    private async Task LoadData()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        users = await context.Accounts.Include(a => a.Role).ToListAsync();
+        roles = await context.Roles.ToListAsync();
+    }
+
+    private async Task UpdateRole(Account u, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int rid))
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var dbUser = await context.Accounts.FindAsync(u.AccountId);
+            if (dbUser != null) { dbUser.RoleId = rid; await context.SaveChangesAsync(); }
+        }
+    }
+    //ghi log khi khoa tk
+    private async Task ToggleStatus(Account u)
+    {
+        u.IsActive = !(u.IsActive ?? false);
+        using var context = await DbFactory.CreateDbContextAsync();
+        context.Accounts.Update(u);
+
+        // Ghi Log rõ ràng trạng thái
+        string statusText = (u.IsActive ?? false) ? "Mở khóa" : "Khóa";
+        await LogUserAction(context, "TOGGLE_USER_STATUS", $"{statusText} tài khoản: {u.Username}");
+
+        await context.SaveChangesAsync();
+    }
+    //ghi log khi reset password
+    private async Task ResetPassword(Account u)
+    {
+        if (await JsRuntime.InvokeAsync<bool>("confirm", $"Reset mật khẩu của {u.Username} về '123456'?"))
+        {
+            u.PasswordHash = "123456";
+            using var context = await DbFactory.CreateDbContextAsync();
+            context.Accounts.Update(u);
+
+            // Ghi Log
+            await LogUserAction(context, "RESET_PASSWORD", $"Reset mật khẩu tài khoản: {u.Username}");
+
+            await context.SaveChangesAsync();
+        }
+    }
+    //them tai khoan duoi quyen admin
+    private async Task AddUser()
+    {
+        if (!string.IsNullOrWhiteSpace(newUser.Username))
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+
+            // 1. Lấy thông tin Admin đang thực hiện thao tác
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var adminUsername = authState.User.Identity?.Name;
+            var adminAccount = await context.Accounts.FirstOrDefaultAsync(a => a.Username == adminUsername);
+
+            // 2. Thiết lập thông tin mặc định cho User mới
+            newUser.PasswordHash = "123456"; // Mật khẩu mặc định
+            newUser.CreatedDate = DateTime.Now;
+            newUser.IsActive = true;
+
+            // 3. Thêm User mới vào bảng Accounts
+            context.Accounts.Add(newUser);
+
+            // 4. Ghi Log thao tác tạo tài khoản
+            if (adminAccount != null)
+            {
+                context.ActionLogs.Add(new ActionLog
+                {
+                    AccountId = adminAccount.AccountId,
+                    ActionType = "CREATE_USER",
+                    Description = $"Admin {adminUsername} đã tạo tài khoản mới: {newUser.Username} (Họ tên: {newUser.FullName})",
+                    LogTime = DateTime.Now
+                });
+            }
+
+            // 5. Lưu tất cả thay đổi vào Database (cả User mới và Log)
+            await context.SaveChangesAsync();
+
+            // 6. Reset Form và tải lại danh sách
+            showModal = false;
+            newUser = new Account { RoleId = 2, IsActive = true }; // Reset đối tượng cho lần sau
+            await LoadData();
+        }
+    } 
+    //ghi log cho user//    
+    private async Task LogUserAction(WebAppManageContext context, string actionType, string description)
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var adminUsername = authState.User.Identity?.Name;
+        var admin = await context.Accounts.FirstOrDefaultAsync(a => a.Username == adminUsername);
+
+        if (admin != null)
+        {
+            context.ActionLogs.Add(new ActionLog
+            {
+                AccountId = admin.AccountId,
+                ActionType = actionType,
+                Description = description,
+                LogTime = DateTime.Now
+            });
+        }
+    }
+}

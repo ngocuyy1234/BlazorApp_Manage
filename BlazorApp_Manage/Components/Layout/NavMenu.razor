@@ -1,0 +1,69 @@
+﻿
+
+@using Microsoft.AspNetCore.Components.Authorization
+
+<div class="top-row ps-3 navbar navbar-dark bg-dark d-flex justify-content-between">
+    <div class="container-fluid d-flex justify-content-between align-items-center">
+        <a class="navbar-brand" href="">BlazorApp_Manage</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="nav flex-column">
+
+        @* Home *@
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill"></span> Home
+            </NavLink>
+        </div>
+
+     @* thiết bị *@
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="devices">
+                <span class="bi bi-hdd-network"></span> Thiết bị
+            </NavLink>
+        </div>
+
+        @* cấu hình mạng *@
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="network-config">
+                <span class="bi bi-hdd-network"></span> Cấu hình mạng
+            </NavLink>
+        </div>
+
+        @*Chỉ Admin mới thấy mục Nhật ký *@
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="logs">
+                        <span class="bi bi-list-ul"></span> Nhật ký
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+        @* quan ly account *@
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="users">
+                        <span class="bi bi-people-fill"></span> Quản lý nhân sự
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+    <meta charset="utf-8" />
+        @* thay doi mat khau cho user *@
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="change-password">
+                        <span class="bi bi-key-fill" aria-hidden="true"></span> Đổi mật khẩu
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+    </nav>
+</div>  

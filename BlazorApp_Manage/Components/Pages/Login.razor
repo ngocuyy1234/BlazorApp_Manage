@@ -1,0 +1,109 @@
+﻿
+
+@page "/login"
+@rendermode InteractiveServer
+
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.ComponentModel.DataAnnotations
+
+@using BlazorApp_Manage.Services
+@using BlazorApp_Manage.Auth
+
+
+@inject AuthService authService
+@inject AuthenticationStateProvider authProvider
+@inject NavigationManager nav
+
+@using Microsoft.EntityFrameworkCore
+@using BlazorApp_Manage.Data
+@inject IDbContextFactory<WebAppManageContext> DbFactory
+
+    <!--Login-->
+<div class="card shadow-sm" style="max-width: 450px; margin: 50px auto;">
+    <div class="card-body p-4">
+        <h3 class="card-title text-center mb-4 fw-bold">Đăng nhập Hệ thống</h3>
+
+        @if (showErrors)
+        {
+            <div class="alert alert-danger">
+                <p class="mb-0">@message</p>
+            </div>
+        }
+
+        <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+
+            <div class="form-group mb-3">
+                <label for="username" class="form-label fw-bold">Tài khoản</label>
+                <InputText id="username" class="form-control" @bind-Value="loginModel.Username" placeholder="Nhập tên đăng nhập" />
+                <ValidationMessage For="() => loginModel.Username" class="text-danger small mt-1" />
+            </div>
+
+            <div class="form-group mb-4">
+                <label for="password" class="form-label fw-bold">Mật khẩu</label>
+                <InputText id="password" type="password" class="form-control" @bind-Value="loginModel.Password" placeholder="Nhập mật khẩu" />
+                <ValidationMessage For="() => loginModel.Password" class="text-danger small mt-1" />
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 fw-bold">Đăng nhập</button>
+        </EditForm>
+    </div>
+</div>
+    
+
+@code {
+    private bool showErrors = false;
+    private string message = "";
+
+    // Khởi tạo model dữ liệu cho form
+    private LoginViewModel loginModel = new LoginViewModel();
+
+    // Định nghĩa class Model để gắn Validation (Ràng buộc dữ liệu)
+    public class LoginViewModel
+    {
+        [Required(ErrorMessage = "Vui lòng nhập tài khoản!")]
+        public string Username { get; set; } = "";
+
+        [Required(ErrorMessage = "Vui lòng nhập mật khẩu!")]
+        public string Password { get; set; } = "";
+    }
+    private async Task HandleLogin()
+    {
+        var user = await authService.LoginAsync(loginModel.Username, loginModel.Password);
+
+        if (user != null)
+        {
+            // 1. Ghi Log vào SQL (Giữ nguyên code cũ của bạn)
+            Console.WriteLine("[LOG - Login Page]: Đang tiến hành ghi log vào bảng ActionLogs...");
+                    using var context = await DbFactory.CreateDbContextAsync();
+                    context.ActionLogs.Add(new ActionLog
+                    {
+                        AccountId = user.AccountId,
+                        ActionType = "LOGIN",
+                        Description = $"User {user.Username} đăng nhập.",
+                        LogTime = DateTime.Now
+                    });
+                    await context.SaveChangesAsync();
+                    Console.WriteLine("[LOG - Login Page]: Đã lưu ActionLog thành công.");
+
+            // 2. THÔNG BÁO VÀ LƯU VÀO STORAGE
+            var customAuthStateProvider = (CustomAuthStateProvider)authProvider;
+            await customAuthStateProvider.UpdateAuthenticationState(new UserSession
+            {
+                Username = user.Username,
+                Role = user.Role?.RoleName ?? "Admin"
+            });
+            // 3. Đổi UI (Dùng forceLoad: true để chắc chắn)
+            nav.NavigateTo("/", true);
+        }
+        else
+        {
+            // KHI SAI MẬT KHẨU HOẶC TÀI KHOẢN
+            message = "Tài khoản hoặc mật khẩu không chính xác. Vui lòng thử lại!";
+            showErrors = true;
+            Console.WriteLine("[LOG - Login Page]: Đăng nhập thất bại.");
+        }
+    }
+}
+
+  
