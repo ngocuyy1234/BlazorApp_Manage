@@ -21,4 +21,9 @@ public partial class Vlan
 
     [NotMapped]
     public int TotalDevices => DeviceVlans?.Count ?? 0;
+
+    public string? NetworkAddress { get; set; }
+    public int? Cidr { get; set; }
+    public string? Description { get; set; }
+
 }

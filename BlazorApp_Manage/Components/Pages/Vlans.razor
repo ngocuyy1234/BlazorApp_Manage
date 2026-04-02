@@ -1,0 +1,497 @@
+﻿@page "/vlans"
+@using BlazorApp_Manage.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* LỚP BẢO VỆ 1: Chỉ Admin và Technician mới được phép vào trang này *@
+@attribute [Authorize(Roles = "Admin,Technician")]
+
+@inject IDbContextFactory<WebAppManageContext> DbFactory
+@inject IJSRuntime Js
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-primary mb-0"><i class="bi bi-diagram-3"></i> Quản lý Subnet (VLAN)</h3>
+            <p class="text-muted small">Quản lý các dải mạng và Gateway trong hệ thống</p>
+        </div>
+
+        <button class="btn btn-primary shadow-sm" @onclick="() => OpenModal()">
+            <i class="bi bi-plus-circle me-2"></i>Thêm VLAN mới
+        </button>
+    </div>
+
+    @if (vlans == null)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Đang tải dữ liệu mạng...</p>
+        </div>
+    }
+    else
+    {
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="px-4">VLAN ID</th>
+                            <th>Tên VLAN</th>
+                            <th>Địa chỉ mạng (Network)</th>
+                            <th>Gateway IP</th>
+                            <th>Subnet Mask</th>
+                            <th class="text-center">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!vlans.Any())
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">Chưa có dữ liệu VLAN nào trong hệ thống.</td>
+                            </tr>
+                        }
+                        @foreach (var item in vlans)
+                        {
+                            <tr>
+                                <td class="px-4"><span class="badge bg-secondary">@item.Vlanid</span></td>
+                                <td class="fw-bold text-dark">@item.Vlanname</td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-info-subtle text-primary border border-info me-2">
+                                            @(string.IsNullOrEmpty(item.NetworkAddress) ? "Chưa tính" : $"{item.NetworkAddress} / {item.Cidr}")
+                                        </span>
+
+                                        @* NÚT THÊM THIẾT BỊ NHANH *@
+                                        <AuthorizeView Roles="Admin,Technician">
+                                            <Authorized>
+                                                <button class="btn btn-sm btn-success rounded-circle"
+                                                        title="Thêm thiết bị vào mạng này"
+                                                        @onclick="() => OpenAddDeviceModal(item)">
+                                                    <i class="bi bi-plus"></i>
+                                                </button>
+                                            </Authorized>
+                                        </AuthorizeView>
+                                    </div>
+                                </td>
+                                <td class="text-primary fw-medium">@item.GatewayIp</td>
+                                <td>@item.SubnetMask</td>
+
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-outline-primary me-2" title="Chỉnh sửa" @onclick="() => OpenModal(item)">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" title="Xóa" @onclick="() => DeleteVlan(item.Vlanid)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@* ========================================= *@
+@* MODAL THÊM / SỬA VLAN                     *@
+@* ========================================= *@
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); z-index: 1050;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi @(currentVlan.Vlanid == 0 ? "bi-plus-circle" : "bi-pencil-square") me-2"></i>
+                        @(currentVlan.Vlanid == 0 ? "Thêm VLAN mới" : $"Cập nhật VLAN {currentVlan.Vlanid}")
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Tên VLAN</label>
+                            <input class="form-control" @bind="currentVlan.Vlanname" placeholder="VD: VLAN Kế toán, VLAN Camera..." />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Gateway IP</label>
+                            <input class="form-control" @bind="currentVlan.GatewayIp" @onblur="OnInputChanged" placeholder="VD: 192.168.10.1" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Subnet Mask</label>
+                            <input class="form-control" @bind="currentVlan.SubnetMask" @onblur="OnInputChanged" placeholder="VD: 255.255.255.0" />
+                        </div>
+
+                        @* KHU VỰC HIỂN THỊ KẾT QUẢ TÍNH TOÁN *@
+                        <div class="col-12 mt-4">
+                            @if (!string.IsNullOrEmpty(currentVlan.NetworkAddress) && currentVlan.NetworkAddress != "Không hợp lệ")
+                            {
+                                <div class="alert alert-success mb-0 shadow-sm border-0">
+                                    <div class="fw-bold mb-2 text-success"><i class="bi bi-cpu-fill me-2"></i>Kết quả phân tích mạng:</div>
+                                    <div class="small text-dark">
+                                        <div class="mb-1">Network Address: <strong>@currentVlan.NetworkAddress / @currentVlan.Cidr</strong></div>
+                                        <div class="mb-1">Dải IP khả dụng: <strong>@ipRange_Display</strong></div>
+                                        <div>Số Host tối đa: <strong>@maxHosts_Display thiết bị</strong></div>
+                                    </div>
+                                </div>
+                            }
+                            else if (currentVlan.NetworkAddress == "Không hợp lệ")
+                            {
+                                <div class="alert alert-danger mb-0 small">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i> IP hoặc Subnet Mask không hợp lệ!
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button class="btn btn-secondary px-4" @onclick="CloseModal">Hủy bỏ</button>
+                    <button class="btn btn-primary px-4" @onclick="SaveVlan">
+                        <i class="bi bi-save2 me-2"></i>Lưu thông tin
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ========================================= *@
+@* MODAL THÊM NHANH THIẾT BỊ VÀO VLAN        *@
+@* ========================================= *@
+@if (showAddDeviceModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="bi bi-pc-display me-2"></i>Thêm thiết bị vào @selectedVlanForDevice.Vlanname</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseAddDeviceModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Tên thiết bị mới</label>
+                            <input class="form-control" @bind="newDevice.DeviceName" placeholder="VD: PC-Ketoan-01, Cam-01..." />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Chọn IP khả dụng (Đã lọc IP trùng)</label>
+                            @if (availableIps.Any())
+                            {
+                                <select class="form-select border-success" @bind="newNetConfig.Ipaddress">
+                                    <option value="">-- Chọn một địa chỉ IP --</option>
+                                    @foreach (var ip in availableIps)
+                                    {
+                                        <option value="@ip">@ip</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning small py-2 mb-0">
+                                    <i class="bi bi-hourglass-split"></i> Đang quét IP hoặc mạng đã đầy!
+                                </div>
+                            }
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small">Subnet Mask</label>
+                            <input class="form-control bg-light" value="@newNetConfig.SubnetMask" readonly />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small">Gateway</label>
+                            <input class="form-control bg-light" value="@newNetConfig.DefaultGateway" readonly />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button class="btn btn-secondary px-4" @onclick="CloseAddDeviceModal">Hủy</button>
+                    <button class="btn btn-success px-4" @onclick="SaveNewDevice">
+                        <i class="bi bi-hdd-network-fill me-2"></i>Thêm vào hệ thống
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // ===============================================
+    // PHẦN CODE CŨ: QUẢN LÝ VLAN
+    // ===============================================
+    private List<Vlan> vlans;
+    private Vlan currentVlan = new();
+    private bool showModal = false;
+
+    // Biến dùng để hiển thị kết quả tính toán trên Modal
+    private string ipRange_Display = "";
+    private int maxHosts_Display = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            vlans = await context.Vlans.AsNoTracking().OrderBy(v => v.Vlanid).ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            await Js.InvokeVoidAsync("alert", "Lỗi tải dữ liệu: " + ex.Message);
+        }
+    }
+
+
+    private void OpenModal(Vlan? vlan = null)
+    {
+        if (vlan != null)
+        {
+            currentVlan = new Vlan
+            {
+                Vlanid = vlan.Vlanid,
+                Vlanname = vlan.Vlanname,
+                GatewayIp = vlan.GatewayIp,
+                SubnetMask = vlan.SubnetMask,
+                NetworkAddress = vlan.NetworkAddress,
+                Cidr = vlan.Cidr,
+                Status = vlan.Status
+            };
+            OnInputChanged();
+        }
+        else
+        {
+            currentVlan = new Vlan { Status = true, SubnetMask = "255.255.255.0" };
+            ipRange_Display = "";
+            maxHosts_Display = 0;
+        }
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        currentVlan = new();
+    }
+
+    private void OnInputChanged()
+    {
+        if (!string.IsNullOrWhiteSpace(currentVlan.GatewayIp) && !string.IsNullOrWhiteSpace(currentVlan.SubnetMask))
+        {
+            var res = NetworkHelper.Calculate(currentVlan.GatewayIp, currentVlan.SubnetMask);
+            currentVlan.NetworkAddress = res.NetworkAddr;
+            currentVlan.Cidr = res.CIDR;
+            maxHosts_Display = res.MaxHosts;
+            ipRange_Display = res.Range;
+        }
+    }
+
+    private async Task SaveVlan()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(currentVlan.Vlanname) || string.IsNullOrWhiteSpace(currentVlan.GatewayIp))
+            {
+                await Js.InvokeVoidAsync("alert", "Vui lòng nhập đủ Tên VLAN và Gateway IP!");
+                return;
+            }
+
+            using var context = await DbFactory.CreateDbContextAsync();
+
+            if (currentVlan.Vlanid == 0)
+            {
+                int maxId = await context.Vlans.MaxAsync(v => (int?)v.Vlanid) ?? 0;
+                currentVlan.Vlanid = (maxId == 0) ? 10 : maxId + 10;
+                context.Vlans.Add(currentVlan);
+            }
+            else
+            {
+                context.Vlans.Update(currentVlan);
+            }
+
+            await context.SaveChangesAsync();
+
+            await Js.InvokeVoidAsync("alert", "Lưu cấu hình VLAN thành công!");
+            CloseModal();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            await Js.InvokeVoidAsync("alert", "Lỗi khi lưu vào CSDL: " + ex.Message);
+        }
+    }
+
+    private async Task DeleteVlan(int id)
+    {
+        bool confirm = await Js.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn xóa VLAN {id} này không? Cảnh báo: Các thiết bị thuộc mạng này có thể mất kết nối!");
+        if (confirm)
+        {
+            try
+            {
+                using var context = await DbFactory.CreateDbContextAsync();
+                var vlanToDelete = await context.Vlans.FindAsync(id);
+                if (vlanToDelete != null)
+                {
+                    context.Vlans.Remove(vlanToDelete);
+                    await context.SaveChangesAsync();
+                    await LoadData();
+                }
+            }
+            catch (Exception)
+            {
+                await Js.InvokeVoidAsync("alert", "Không thể xóa VLAN này vì đang có thiết bị sử dụng (Dính khóa ngoại). Vui lòng gỡ thiết bị khỏi VLAN trước!");
+            }
+        }
+    }
+
+    // ===============================================
+    // PHẦN CODE MỚI: THÊM THIẾT BỊ NHANH VÀO VLAN
+    // ===============================================
+    private bool showAddDeviceModal = false;
+    private Vlan selectedVlanForDevice = new();
+    private Device newDevice = new();
+    private Data.NetworkConfig newNetConfig = new();
+    private List<string> availableIps = new();
+
+    private async Task OpenAddDeviceModal(Vlan vlan)
+    {
+        if (string.IsNullOrEmpty(vlan.NetworkAddress) || !vlan.Cidr.HasValue)
+        {
+            await Js.InvokeVoidAsync("alert", "VLAN này chưa được tính toán Địa chỉ mạng. Vui lòng bấm Sửa và Lưu lại để hệ thống tính toán trước!");
+            return;
+        }
+
+        selectedVlanForDevice = vlan;
+        newDevice = new Device { Status = "Online" };
+        newNetConfig = new Data.NetworkConfig
+        {
+            SubnetMask = vlan.SubnetMask,
+            DefaultGateway = vlan.GatewayIp,
+            PrimaryDns = "8.8.8.8"
+        };
+
+        showAddDeviceModal = true;
+        await GenerateAvailableIps(vlan);
+    }
+
+    private void CloseAddDeviceModal()
+    {
+        showAddDeviceModal = false;
+        newDevice = new();
+        newNetConfig = new();
+        availableIps.Clear();
+    }
+
+    private async Task GenerateAvailableIps(Vlan vlan)
+    {
+        availableIps.Clear();
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        // Lấy danh sách các IP đã được cấp phát trong hệ thống
+        var usedIps = await context.NetworkConfigs
+                                   .Where(n => n.Ipaddress != null)
+                                   .Select(n => n.Ipaddress)
+                                   .ToListAsync();
+
+        try
+        {
+            var ipBytes = System.Net.IPAddress.Parse(vlan.NetworkAddress).GetAddressBytes();
+            Array.Reverse(ipBytes); // Revert để dùng BitConverter
+            uint ipAsInt = BitConverter.ToUInt32(ipBytes, 0);
+
+            uint maxHosts = (uint)Math.Pow(2, 32 - vlan.Cidr.Value) - 2;
+            int displayLimit = 0;
+
+            // Quét dải IP
+            for (uint i = 1; i <= maxHosts; i++)
+            {
+                uint currentIpInt = ipAsInt + i;
+                byte[] bytes = BitConverter.GetBytes(currentIpInt);
+                Array.Reverse(bytes);
+                string currentIpStr = new System.Net.IPAddress(bytes).ToString();
+
+                // Bỏ qua Gateway và các IP đã được sử dụng
+                if (currentIpStr != vlan.GatewayIp && !usedIps.Contains(currentIpStr))
+                {
+                    availableIps.Add(currentIpStr);
+                    displayLimit++;
+
+                    // Chỉ hiển thị tối đa 100 IP trống để tránh giật lag Modal
+                    if (displayLimit >= 100) break;
+                }
+            }
+
+            if (availableIps.Any())
+            {
+                newNetConfig.Ipaddress = availableIps.First();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Lỗi sinh IP: " + ex.Message);
+        }
+    }
+
+    private async Task SaveNewDevice()
+    {
+        if (string.IsNullOrWhiteSpace(newDevice.DeviceName) || string.IsNullOrWhiteSpace(newNetConfig.Ipaddress))
+        {
+            await Js.InvokeVoidAsync("alert", "Vui lòng nhập tên thiết bị và chọn một IP khả dụng!");
+            return;
+        }
+
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+
+            // --- XỬ LÝ KHÓA NGOẠI: Lấy tự động 1 loại thiết bị mặc định ---
+            var defaultType = await context.DeviceTypes.FirstOrDefaultAsync();
+            if (defaultType != null)
+            {
+                newDevice.DeviceTypeId = defaultType.TypeId;
+            }
+            else
+            {
+                await Js.InvokeVoidAsync("alert", "Lỗi: Không tìm thấy loại thiết bị nào trong CSDL (bảng DeviceTypes)!");
+                return;
+            }
+
+            // --- BƯỚC 1: XỬ LÝ LƯU THIẾT BỊ (DEVICE) ---
+            newDevice.DeviceId = 0;
+            newDevice.Status = "Online";
+
+            // Cấp một địa chỉ MAC tạm thời không bao giờ trùng (Ví dụ: TEMP-A1B2C3D4)
+            newDevice.Macaddress = "TEMP-" + Guid.NewGuid().ToString().Substring(0, 8).ToUpper();
+
+            context.Devices.Add(newDevice);
+            await context.SaveChangesAsync();
+
+            // --- BƯỚC 2: XỬ LÝ LƯU CẤU HÌNH MẠNG (NETWORK CONFIG) ---
+            newNetConfig.DeviceId = newDevice.DeviceId;
+            newNetConfig.UpdatedDate = DateTime.Now;
+
+            // Gán luôn VLAN ID hiện tại cho thiết bị (Dựa vào SQL bạn mới cung cấp)
+            newNetConfig.Vlanid = selectedVlanForDevice.Vlanid;
+
+            if (string.IsNullOrEmpty(newNetConfig.PrimaryDns)) newNetConfig.PrimaryDns = "8.8.8.8";
+
+            context.NetworkConfigs.Add(newNetConfig);
+            await context.SaveChangesAsync();
+
+            await Js.InvokeVoidAsync("alert", $"Đã thêm {newDevice.DeviceName} thành công với IP {newNetConfig.Ipaddress}!");
+            CloseAddDeviceModal();
+        }
+        catch (Exception ex)
+        {
+            string exactError = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+            Console.WriteLine("=== LỖI SQL CHI TIẾT KHI LƯU THIẾT BỊ ===");
+            Console.WriteLine(exactError);
+            await Js.InvokeVoidAsync("alert", "LỖI TỪ CƠ SỞ DỮ LIỆU:\n\n" + exactError);
+        }
+    }
+}

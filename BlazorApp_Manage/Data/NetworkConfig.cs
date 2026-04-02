@@ -22,4 +22,5 @@ public partial class NetworkConfig
     public DateTime? UpdatedDate { get; set; }
 
     public virtual Device Device { get; set; } = null!;
+    public int? Vlanid { get; set; }
 }

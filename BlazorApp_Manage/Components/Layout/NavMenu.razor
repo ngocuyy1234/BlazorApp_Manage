@@ -2,9 +2,15 @@
 
 @using Microsoft.AspNetCore.Components.Authorization
 
-<div class="top-row ps-3 navbar navbar-dark bg-dark d-flex justify-content-between">
-    <div class="container-fluid d-flex justify-content-between align-items-center">
-        <a class="navbar-brand" href="">BlazorApp_Manage</a>
+<div class="top-row ps-3 navbar navbar-dark bg-dark">
+    <div class="container-fluid p-0">
+        <a class="navbar-brand d-flex align-items-center m-0" href="">
+
+            @* TIÊU ĐỀ: Đã ép rớt thành 2 dòng và canh lề trái *@
+            <span style="font-size: 1.0rem; line-height: 1.3; white-space: normal; font-weight: bold; text-align: left;">
+                HỆ THỐNG QUẢN LÝ<br />THIẾT BỊ MẠNG
+            </span>
+        </a>
     </div>
 </div>
 
@@ -50,6 +56,16 @@
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="users">
                         <span class="bi bi-people-fill"></span> Quản lý nhân sự
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+        @*cau hinh vlans*@
+        <AuthorizeView Roles="Admin,Technician">
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="vlans">
+                        <i class="bi bi-diagram-3 me-2"></i> Quản lý VLAN/Subnet
                     </NavLink>
                 </div>
             </Authorized>

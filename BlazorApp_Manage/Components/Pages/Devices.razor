@@ -34,11 +34,10 @@
                     <thead class="table-dark">
                         <tr>
                             <th>Tên thiết bị</th>
-                            <th>Loại thiết bị</th>
                             <th>Tòa nhà</th>
                             <th>Tầng</th>
                             <th>Phòng</th>
-                            <th>Tủ Rack</th>
+                            <th>Vị trí</th>
                             <th>Trạng thái</th>
                             <th class="text-center">Thao tác</th>
                         </tr>
@@ -51,7 +50,6 @@
                                     <span class="fw-bold">@d.DeviceName</span><br />
                                     <small class="text-muted">SN: @d.SerialNumber</small>
                                 </td>
-                                <td><span class="badge bg-info-subtle text-dark border border-info">@d.DeviceType?.TypeName</span></td>
                                 <td>@d.Location?.Building</td>
                                 <td>@d.Location?.Floor</td>
                                 <td>@d.Location?.Room</td>
@@ -89,7 +87,6 @@
         </div>
     }
 
-    @* --- MODAL GIỮ NGUYÊN NHƯ BẢN CŨ CỦA UY --- *@
     @if (showModal)
     {
         <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(3px);">
@@ -116,15 +113,6 @@
                             <div class="col-md-6">
                                 <label class="form-label fw-bold small text-uppercase">Địa chỉ MAC <span class="text-muted fw-normal">(Tùy chọn)</span></label>
                                 <input class="form-control shadow-sm bg-light" @bind="currentDevice.Macaddress" placeholder="Để trống nếu không có" />
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small text-uppercase">Loại thiết bị</label>
-                                <select class="form-select shadow-sm" @bind="currentDevice.DeviceTypeId">
-                                    @foreach (var t in deviceTypes)
-                                    {
-                                        <option value="@t.TypeId">@t.TypeName</option>
-                                    }
-                                </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label fw-bold small text-uppercase">Khu vực (ID)</label>
@@ -156,8 +144,8 @@
                                     <input class="form-control" @bind="currentDevice.Location.Room" />
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label fw-bold small">Tủ Rack / Vị trí U</label>
-                                    <input class="form-control" @bind="currentDevice.Location.Rack" />
+                                    <label class="form-label fw-bold small">Vị trí chi tiết</label>
+                                    <input class="form-control bg-light" @bind="currentDevice.Location.Rack" />
                                 </div>
                             }
                         </div>
@@ -232,17 +220,31 @@
             using var context = await DbFactory.CreateDbContextAsync();
             bool isNew = currentDevice.DeviceId == 0;
 
+            // --- ĐOẠN CODE ÉP BUỘC LƯU VỊ TRÍ XUỐNG CSDL ---
+            if (currentDevice.LocationId.HasValue && currentDevice.Location != null)
+            {
+                // Bắt hệ thống tìm chính xác cái Vị trí đó trong Database
+                var locInDb = await context.Locations.FindAsync(currentDevice.LocationId.Value);
+                if (locInDb != null)
+                {
+                    // Chép đè những chữ bạn vừa chỉnh sửa trên giao diện vào Database
+                    locInDb.Building = currentDevice.Location.Building;
+                    locInDb.Floor = currentDevice.Location.Floor;
+                    locInDb.Room = currentDevice.Location.Room;
+                    locInDb.Rack = currentDevice.Location.Rack;
+                }
+            }
+            // ---------------------------------------------------------
+
             // Ngắt kết nối để tránh lỗi Identity
             currentDevice.DeviceType = null;
             currentDevice.Location = null;
 
             if (isNew)
             {
-                // Tự sinh Serial nếu trống
                 if (string.IsNullOrEmpty(currentDevice.SerialNumber))
                     currentDevice.SerialNumber = "SN-" + DateTime.Now.Ticks.ToString().Substring(10);
 
-                // XỬ LÝ MAC ADDRESS: Nếu để trống, tạo một mã ngẫu nhiên duy nhất
                 if (string.IsNullOrEmpty(currentDevice.Macaddress))
                 {
                     currentDevice.Macaddress = "GEN-" + Guid.NewGuid().ToString().Substring(0, 8).ToUpper();
@@ -261,7 +263,7 @@
 
             await context.SaveChangesAsync();
             showModal = false;
-            await LoadData();
+            await LoadData(); // Tải lại dữ liệu mới nhất
             await JsRuntime.InvokeVoidAsync("alert", "Lưu thành công!");
         }
         catch (Exception ex)
@@ -270,7 +272,6 @@
             await JsRuntime.InvokeVoidAsync("alert", "Lỗi: " + msg);
         }
     }
-
     // CHỈ GIỮ LẠI MỘT HÀM DELETE DUY NHẤT ĐÃ ĐƯỢC TỐI ƯU
     private async Task DeleteDevice(Device d)
     {
