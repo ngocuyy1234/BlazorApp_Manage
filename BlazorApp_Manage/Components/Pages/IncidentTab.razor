@@ -1,0 +1,200 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using BlazorApp_Manage.Data
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<WebAppManageContext> DbFactory
+@inject AuthenticationStateProvider AuthStateProvider
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+        <h5 class="mb-0 fw-bold">Danh sách sự cố hệ thống</h5>
+        <button class="btn btn-danger btn-sm fw-bold" @onclick="OpenNewIncidentModal">
+            <i class="bi bi-plus-lg"></i> Lập biên bản mới
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-muted small">
+                    <tr>
+                        <th class="ps-3">Thời gian</th>
+                        <th>Thiết bị lỗi</th>
+                        <th>Mô tả sự cố</th>
+                        <th>Người lập BB</th>
+                        <th>Trạng thái</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var incident in mockIncidents.OrderByDescending(x => x.ReportTime))
+                    {
+                        <tr>
+                            <td class="ps-3">@incident.ReportTime.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td class="fw-bold">@incident.DeviceName</td>
+                            <td class="text-muted small text-truncate" style="max-width: 250px;">@incident.Description</td>
+                            <td>@incident.ReportedBy</td>
+                            <td>
+                                @if (incident.Status == "Chưa xử lý")
+                                {
+                                    <span class="badge bg-danger">Chưa xử lý</span>
+                                }
+                                else if (incident.Status == "Đang xử lý")
+                                {
+                                    <span class="badge bg-warning text-dark">Đang xử lý</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">Đã khắc phục</span>
+                                }
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenUpdateIncidentModal(incident)">Cập nhật</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@if (showIncidentModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title fw-bold">@(isNewIncident ? "Lập Biên bản Sự cố mới" : "Cập nhật Biên bản Sự cố")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseIncidentModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Vị trí sự cố</label>
+                            <select class="form-select" @bind="currentIncident.Location">
+                                <option value="Site Mỹ Tho">Site Mỹ Tho</option>
+                                <option value="Site Cao Lãnh">Site Cao Lãnh</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Mức độ ảnh hưởng</label>
+                            <select class="form-select" @bind="currentIncident.Severity">
+                                <option value="Nhẹ">🟢 Nhẹ</option>
+                                <option value="Trung bình">🟡 Trung bình</option>
+                                <option value="Nghiêm trọng">🔴 Nghiêm trọng</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Hệ thống/Thiết bị lỗi</label>
+                            <input type="text" class="form-control" @bind="currentIncident.DeviceName" placeholder="Tên thiết bị..." />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Mô tả sự cố & Phạm vi ảnh hưởng</label>
+                            <textarea class="form-control" rows="2" @bind="currentIncident.Description"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Nguyên nhân & Biện pháp xử lý</label>
+                            <textarea class="form-control" rows="2" @bind="currentIncident.ActionsTaken" placeholder="Ghi rõ quá trình đã khắc phục..."></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Trạng thái sau xử lý</label>
+                            <select class="form-select" @bind="currentIncident.Status">
+                                <option value="Hệ thống đang tiếp tục theo dõi">⚠️ Đang tiếp tục theo dõi</option>
+                                <option value="Hệ thống đã hoạt động bình thường">✅ Đã hoạt động bình thường</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Kiến nghị phòng ngừa</label>
+                            <input type="text" class="form-control" @bind="currentIncident.Recommendations" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseIncidentModal">Hủy</button>
+                    <button type="button" class="btn btn-danger" @onclick="SaveIncident">Lưu Biên Bản</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string currentLoggedInUser = "Unknown";
+    private List<IncidentMock> mockIncidents = new();
+    private bool showIncidentModal = false;
+    private bool isNewIncident = true;
+    private IncidentMock currentIncident = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity is { IsAuthenticated: true })
+            currentLoggedInUser = authState.User.Identity.Name ?? "admin";
+
+        mockIncidents = new List<IncidentMock>
+        {
+            new IncidentMock { ReportTime = DateTime.Now.AddHours(-5), DeviceName = "Router-Core-01", Description = "Mất kết nối quang", ReportedBy = "admin", Status = "Đang xử lý" },
+            new IncidentMock { ReportTime = DateTime.Now.AddDays(-2), DeviceName = "Switch-Access-T3", Description = "Lỗi loop mạng", ReportedBy = "tech1", Status = "Đã khắc phục" }
+        };
+    }
+
+    private void OpenNewIncidentModal()
+    {
+        isNewIncident = true;
+        currentIncident = new IncidentMock { ReportedBy = currentLoggedInUser, ReportTime = DateTime.Now, Status = "Chưa xử lý" };
+        showIncidentModal = true;
+    }
+
+    private void OpenUpdateIncidentModal(IncidentMock item)
+    {
+        isNewIncident = false;
+        currentIncident = item;
+        showIncidentModal = true;
+    }
+
+    private void CloseIncidentModal() => showIncidentModal = false;
+
+    private async Task SaveIncident()
+    {
+        if (isNewIncident)
+        {
+            await LogActionAsync("CREATE_INCIDENT", $"Lập biên bản sự cố cho thiết bị: {currentIncident.DeviceName}");
+            currentIncident.ReportTime = DateTime.Now;
+            mockIncidents.Add(currentIncident);
+        }
+        else
+        {
+            await LogActionAsync("UPDATE_INCIDENT", $"Cập nhật sự cố {currentIncident.DeviceName} thành: {currentIncident.Status}");
+        }
+        showIncidentModal = false;
+    }
+
+    private async Task LogActionAsync(string actionType, string description)
+    {
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var account = await context.Accounts.FirstOrDefaultAsync(a => a.Username == currentLoggedInUser);
+            if (account != null)
+            {
+                context.ActionLogs.Add(new ActionLog { AccountId = account.AccountId, ActionType = actionType, Description = description, LogTime = DateTime.Now });
+                await context.SaveChangesAsync();
+            }
+        }
+        catch { }
+    }
+
+    public class IncidentMock
+    {
+        public DateTime ReportTime { get; set; }
+        public string ReportedBy { get; set; } = "";
+        public string DeviceName { get; set; } = ""; // Hệ thống/thiết bị bị ảnh hưởng [cite: 8]
+        public string Location { get; set; } = "Site Mỹ Tho"; // Vị trí xảy ra sự cố [cite: 8]
+        public string Severity { get; set; } = "Trung bình"; // Mức độ ảnh hưởng: Nghiêm trọng/Trung bình/Nhẹ [cite: 8]
+        public string Description { get; set; } = ""; // Mô tả sự cố [cite: 10]
+        public string Scope { get; set; } = ""; // Phạm vi ảnh hưởng [cite: 12]
+        public string RootCause { get; set; } = ""; // Nguyên nhân sự cố [cite: 14]
+        public string ActionsTaken { get; set; } = ""; // Các biện pháp xử lý đã thực hiện [cite: 15]
+        public string Status { get; set; } = "Hệ thống đang tiếp tục theo dõi"; // Trạng thái sau xử lý [cite: 17, 18]
+        public string Recommendations { get; set; } = ""; // Kiến nghị / giải pháp phòng ngừa [cite: 19]
+    }
+}

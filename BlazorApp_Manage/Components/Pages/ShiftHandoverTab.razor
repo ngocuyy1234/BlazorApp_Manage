@@ -1,0 +1,203 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using BlazorApp_Manage.Data
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<WebAppManageContext> DbFactory
+@inject AuthenticationStateProvider AuthStateProvider
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+        <h5 class="mb-0 fw-bold">Lịch sử bàn giao ca</h5>
+        <button class="btn btn-primary btn-sm fw-bold" @onclick="OpenNewHandoverModal">
+            <i class="bi bi-plus-lg"></i> Viết bàn giao mới
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-muted small">
+                    <tr>
+                        <th class="ps-3">Ngày trực</th>
+                        <th>Ca trực</th>
+                        <th>Site</th>
+                        <th>Người giao</th>
+                        <th>Người nhận</th>
+                        <th>Trạng thái chung</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in mockHandovers.OrderByDescending(x => x.ShiftDate))
+                    {
+                        <tr>
+                            <td class="ps-3 fw-bold">@item.ShiftDate.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td><span class="badge bg-secondary">@item.ShiftType</span></td>
+                            <td>@item.Site</td>
+                            <td>@item.Sender</td>
+                            <td>@item.Receiver</td>
+                            <td>
+                                @* Kiểm tra nếu cả 5 hệ thống đều bình thường *@
+                                @if (item.ServerStatus == "Bình thường" && item.NetworkStatus == "Bình thường" && item.StorageStatus == "Bình thường" && item.SoftwareStatus == "Bình thường" && item.PowerAcStatus == "Bình thường")
+                                {
+                                    <span class="text-success fw-bold"><i class="bi bi-check-circle-fill"></i> Bình thường</span>
+                                }
+                                else
+                                {
+                                    <span class="text-warning fw-bold"><i class="bi bi-exclamation-circle-fill"></i> Có sự cố</span>
+                                }
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-info" @onclick="() => OpenViewHandoverModal(item)">Chi tiết</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@if (showHandoverModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold">@(isViewOnlyHandover ? "Chi tiết Bàn giao ca" : "Viết Bàn giao ca mới")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseHandoverModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Ca trực</label>
+                            <select class="form-select" @bind="currentHandover.ShiftType" disabled="@isViewOnlyHandover">
+                                <option value="Ngày">☀️ Ca Ngày</option>
+                                <option value="Đêm">🌙 Ca Đêm</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Site phụ trách</label>
+                            <select class="form-select" @bind="currentHandover.Site" disabled="@isViewOnlyHandover">
+                                <option value="Mỹ Tho">🏢 Site Mỹ Tho</option>
+                                <option value="Cao Lãnh">🏢 Site Cao Lãnh</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Người giao ca (Bạn)</label>
+                            <input type="text" class="form-control" @bind="currentHandover.Sender" disabled />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Người nhận ca</label>
+                            <input type="text" class="form-control" @bind="currentHandover.Receiver" disabled="@isViewOnlyHandover" placeholder="Nhập ID/Tên người nhận..." />
+                        </div>
+
+                        <div class="col-12 mt-4">
+                            <h6 class="fw-bold text-primary border-bottom pb-2">Tình trạng hệ thống</h6>
+                        </div>
+
+                        <div class="col-md-6"><label class="form-label small">Hạ tầng máy chủ</label><select class="form-select form-select-sm" @bind="currentHandover.ServerStatus" disabled="@isViewOnlyHandover"><option value="Bình thường">Bình thường</option><option value="Có sự cố">Có sự cố</option></select></div>
+                        <div class="col-md-6"><label class="form-label small">Hệ thống mạng</label><select class="form-select form-select-sm" @bind="currentHandover.NetworkStatus" disabled="@isViewOnlyHandover"><option value="Bình thường">Bình thường</option><option value="Có sự cố">Có sự cố</option></select></div>
+                        <div class="col-md-6"><label class="form-label small">Hệ thống lưu trữ</label><select class="form-select form-select-sm" @bind="currentHandover.StorageStatus" disabled="@isViewOnlyHandover"><option value="Bình thường">Bình thường</option><option value="Có sự cố">Có sự cố</option></select></div>
+                        <div class="col-md-6"><label class="form-label small">Hệ thống phần mềm</label><select class="form-select form-select-sm" @bind="currentHandover.SoftwareStatus" disabled="@isViewOnlyHandover"><option value="Bình thường">Bình thường</option><option value="Có sự cố">Có sự cố</option></select></div>
+                        <div class="col-md-6"><label class="form-label small">Hệ thống điện / máy lạnh</label><select class="form-select form-select-sm" @bind="currentHandover.PowerAcStatus" disabled="@isViewOnlyHandover"><option value="Bình thường">Bình thường</option><option value="Có sự cố">Có sự cố</option></select></div>
+
+                        <div class="col-12 mt-3">
+                            <label class="form-label fw-bold small">Sự cố đang theo dõi & Công việc cần làm</label>
+                            <textarea class="form-control" rows="3" @bind="currentHandover.Notes" disabled="@isViewOnlyHandover" placeholder="Nhập các sự cố chưa xử lý xong và công việc bàn giao cho ca sau..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseHandoverModal">Đóng</button>
+                    @if (!isViewOnlyHandover)
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="SaveHandover">Lưu Bàn Giao</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string currentLoggedInUser = "Unknown";
+    private List<HandoverMock> mockHandovers = new();
+    private bool showHandoverModal = false;
+    private bool isViewOnlyHandover = false;
+    private HandoverMock currentHandover = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity is { IsAuthenticated: true })
+            currentLoggedInUser = authState.User.Identity.Name ?? "admin";
+    
+    }
+
+    private void OpenNewHandoverModal()
+    {
+        isViewOnlyHandover = false;
+        currentHandover = new HandoverMock
+        {
+            Sender = currentLoggedInUser,
+            ShiftDate = DateTime.Now,
+            ShiftType = "Ngày",
+            Site = "Mỹ Tho",
+            ServerStatus = "Bình thường",
+            NetworkStatus = "Bình thường",
+            StorageStatus = "Bình thường",
+            SoftwareStatus = "Bình thường",
+            PowerAcStatus = "Bình thường"
+        };
+        showHandoverModal = true;
+    }
+
+    private void OpenViewHandoverModal(HandoverMock item)
+    {
+        isViewOnlyHandover = true;
+        currentHandover = item;
+        showHandoverModal = true;
+    }
+
+    private void CloseHandoverModal() => showHandoverModal = false;
+
+    private async Task SaveHandover()
+    {
+        await LogActionAsync("CREATE_HANDOVER", $"Viết bàn giao ca cho người nhận: {currentHandover.Receiver}");
+        currentHandover.ShiftDate = DateTime.Now;
+        mockHandovers.Add(currentHandover);
+        showHandoverModal = false;
+    }
+
+    private async Task LogActionAsync(string actionType, string description)
+    {
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var account = await context.Accounts.FirstOrDefaultAsync(a => a.Username == currentLoggedInUser);
+            if (account != null)
+            {
+                context.ActionLogs.Add(new ActionLog { AccountId = account.AccountId, ActionType = actionType, Description = description, LogTime = DateTime.Now });
+                await context.SaveChangesAsync();
+            }
+        }
+        catch { }
+    }
+
+    public class HandoverMock
+    {
+        public DateTime ShiftDate { get; set; }
+        public string ShiftType { get; set; } = "Ngày";
+        public string Site { get; set; } = "Mỹ Tho";
+        public string Sender { get; set; } = "";
+        public string Receiver { get; set; } = "";
+
+        public string ServerStatus { get; set; } = "Bình thường";
+        public string NetworkStatus { get; set; } = "Bình thường";
+        public string StorageStatus { get; set; } = "Bình thường";
+        public string SoftwareStatus { get; set; } = "Bình thường";
+        public string PowerAcStatus { get; set; } = "Bình thường";
+
+        public string Notes { get; set; } = "";
+    }
+}

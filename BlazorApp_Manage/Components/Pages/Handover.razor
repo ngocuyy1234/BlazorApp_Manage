@@ -1,0 +1,45 @@
+﻿@page "/handover"
+@attribute [Authorize]
+
+<div class="container-fluid pt-3">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold text-primary"><i class="bi bi-journal-text me-2"></i>Sổ Giao Ca & Biên Bản Sự Cố</h3>
+        <span class="text-muted">Hệ thống Quản lý Hạ tầng NIM</span>
+    </div>
+
+    <ul class="nav nav-tabs mb-4 border-bottom border-2">
+        <li class="nav-item">
+            <a class="nav-link fw-bold @(activeTab == "bangiao" ? "active text-primary border-primary border-bottom-0" : "text-muted")"
+               style="cursor:pointer; font-size: 1.1rem;"
+               @onclick='() => SwitchTab("bangiao")'>
+                <i class="bi bi-arrow-left-right me-1"></i> Bàn giao ca trực
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link fw-bold @(activeTab == "suco" ? "active text-danger border-danger border-bottom-0" : "text-muted")"
+               style="cursor:pointer; font-size: 1.1rem;"
+               @onclick='() => SwitchTab("suco")'>
+                <i class="bi bi-exclamation-triangle me-1"></i> Biên bản sự cố
+            </a>
+        </li>
+    </ul>
+
+    @if (activeTab == "bangiao")
+    {
+        <ShiftHandoverTab />
+    }
+    else if (activeTab == "suco")
+    {
+        <IncidentTab />
+    }
+
+</div>
+
+@code {
+    private string activeTab = "bangiao";
+
+    private void SwitchTab(string tabName)
+    {
+        activeTab = tabName;
+    }
+}
