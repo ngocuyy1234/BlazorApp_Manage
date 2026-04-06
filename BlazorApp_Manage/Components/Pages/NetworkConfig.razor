@@ -203,7 +203,7 @@
     {
         using var context = await DbFactory.CreateDbContextAsync();
         var data = await context.Devices
-            .Include(d => d.Ports)
+            .Include(d => d.PortDevices)
             .Include(d => d.NetworkConfig)
             .ToListAsync();
 
@@ -229,8 +229,12 @@
     private async Task SaveNetwork(Device d)
     {
         using var context = await DbFactory.CreateDbContextAsync();
+
+        // 1. Kiểm tra trùng IP
         var isDuplicate = await context.NetworkConfigs
-            .AnyAsync(x => x.Ipaddress == d.NetworkConfig.Ipaddress && x.DeviceId != d.DeviceId && !string.IsNullOrEmpty(d.NetworkConfig.Ipaddress));
+            .AnyAsync(x => x.Ipaddress == d.NetworkConfig.Ipaddress &&
+                           x.DeviceId != d.DeviceId &&
+                           !string.IsNullOrEmpty(d.NetworkConfig.Ipaddress));
 
         if (isDuplicate)
         {
@@ -238,10 +242,25 @@
             return;
         }
 
+        // 2. Cập nhật cấu hình mạng
         d.NetworkConfig.UpdatedDate = DateTime.Now;
         context.NetworkConfigs.Update(d.NetworkConfig);
+
+        // 3. THÊM TÍNH NĂNG GHI LOG TẠI ĐÂY
+        var newLog = new ActionLog
+        {
+            AccountId = 1, // Tạm thời để cứng ID 1 (Admin). Bạn có thể thay bằng ID thật lấy từ Session/Authentication.
+            ActionType = "UPDATE_NETWORK",
+            Description = $"Cập nhật cấu hình mạng (IP: {d.NetworkConfig.Ipaddress}, GW: {d.NetworkConfig.DefaultGateway})",
+            DeviceId = d.DeviceId,
+            LogTime = DateTime.Now
+        };
+        context.ActionLogs.Add(newLog);
+
+        // 4. Lưu tất cả thay đổi (cả Network và Log) xuống Database cùng một lúc
         await context.SaveChangesAsync();
-        await Js.InvokeVoidAsync("alert", "Cấu hình mạng đã được cập nhật thành công!");
+
+        await Js.InvokeVoidAsync("alert", "Cấu hình mạng đã được cập nhật và ghi log thành công!");
     }
     // Hàm thực thi khi người dùng click vào Gateway IP
     private async Task ViewSubnets(string? gatewayIp)

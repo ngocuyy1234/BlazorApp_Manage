@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
-namespace BlazorApp_Manage.Data;
+namespace BlazorApp_Manage.Models;
 
 public partial class WebAppManageContext : DbContext
 {
@@ -25,29 +25,21 @@ public partial class WebAppManageContext : DbContext
 
     public virtual DbSet<DeviceVlan> DeviceVlans { get; set; }
 
-    public virtual DbSet<DutySchedule> DutySchedules { get; set; }
-
     public virtual DbSet<FirmwareStandard> FirmwareStandards { get; set; }
-
-    public virtual DbSet<IncidentReport> IncidentReports { get; set; }
 
     public virtual DbSet<Location> Locations { get; set; }
 
     public virtual DbSet<NetworkConfig> NetworkConfigs { get; set; }
 
-    public virtual DbSet<Notification> Notifications { get; set; }
-
     public virtual DbSet<Port> Ports { get; set; }
 
     public virtual DbSet<Role> Roles { get; set; }
-
-    public virtual DbSet<ShiftHandover> ShiftHandovers { get; set; }
 
     public virtual DbSet<Vlan> Vlans { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Server=LAPTOP-4B7AKCQF\\NGOCUY;Database=WebApp_Manage;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true");
+        => optionsBuilder.UseSqlServer("Server=LAPTOP-4B7AKCQF\\NGOCUY;Database=WebApp_Manage;Trusted_Connection=True;TrustServerCertificate=True;");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -120,20 +112,16 @@ public partial class WebAppManageContext : DbContext
             entity.Property(e => e.DeviceName).HasMaxLength(100);
             entity.Property(e => e.DeviceTypeId).HasColumnName("DeviceTypeID");
             entity.Property(e => e.FirmwareVersion).HasMaxLength(50);
-            entity.Property(e => e.IsVirtual).HasDefaultValue(false);
             entity.Property(e => e.LocationId).HasColumnName("LocationID");
             entity.Property(e => e.Macaddress)
                 .HasMaxLength(17)
                 .HasColumnName("MACAddress");
             entity.Property(e => e.Manufacturer).HasMaxLength(100);
             entity.Property(e => e.Model).HasMaxLength(100);
-            entity.Property(e => e.RamGb).HasColumnName("RamGB");
             entity.Property(e => e.SerialNumber).HasMaxLength(100);
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .HasDefaultValue("Offline");
-            entity.Property(e => e.StorageGb).HasColumnName("StorageGB");
-            entity.Property(e => e.UplinkPort).HasMaxLength(50);
 
             entity.HasOne(d => d.DeviceType).WithMany(p => p.Devices)
                 .HasForeignKey(d => d.DeviceTypeId)
@@ -143,14 +131,6 @@ public partial class WebAppManageContext : DbContext
             entity.HasOne(d => d.Location).WithMany(p => p.Devices)
                 .HasForeignKey(d => d.LocationId)
                 .HasConstraintName("FK_Device_Location");
-
-            entity.HasOne(d => d.ParentDevice).WithMany(p => p.InverseParentDevice)
-                .HasForeignKey(d => d.ParentDeviceId)
-                .HasConstraintName("FK_Device_Parent");
-
-            entity.HasOne(d => d.UplinkDevice).WithMany(p => p.InverseUplinkDevice)
-                .HasForeignKey(d => d.UplinkDeviceId)
-                .HasConstraintName("FK_Device_Uplink");
         });
 
         modelBuilder.Entity<DeviceType>(entity =>
@@ -181,26 +161,6 @@ public partial class WebAppManageContext : DbContext
                 .HasConstraintName("FK_DV_VLAN");
         });
 
-        modelBuilder.Entity<DutySchedule>(entity =>
-        {
-            entity.HasKey(e => e.ScheduleId).HasName("PK__DutySche__9C8A5B69581991D7");
-
-            entity.Property(e => e.ScheduleId).HasColumnName("ScheduleID");
-            entity.Property(e => e.AccountId).HasColumnName("AccountID");
-            entity.Property(e => e.CreatedDate).HasDefaultValueSql("(getdate())");
-            entity.Property(e => e.ShiftType).HasMaxLength(50);
-            entity.Property(e => e.Site).HasMaxLength(100);
-
-            entity.HasOne(d => d.Account).WithMany(p => p.DutyScheduleAccounts)
-                .HasForeignKey(d => d.AccountId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Duty_Account");
-
-            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.DutyScheduleCreatedByNavigations)
-                .HasForeignKey(d => d.CreatedBy)
-                .HasConstraintName("FK_Duty_Creator");
-        });
-
         modelBuilder.Entity<FirmwareStandard>(entity =>
         {
             entity.HasKey(e => e.TypeId).HasName("PK__Firmware__516F03958B0EF1D6");
@@ -215,30 +175,6 @@ public partial class WebAppManageContext : DbContext
                 .HasForeignKey<FirmwareStandard>(d => d.TypeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Std_Type");
-        });
-
-        modelBuilder.Entity<IncidentReport>(entity =>
-        {
-            entity.HasKey(e => e.ReportId).HasName("PK__Incident__D5BD48E5FCE597A0");
-
-            entity.Property(e => e.ReportId).HasColumnName("ReportID");
-            entity.Property(e => e.CreatedDate).HasDefaultValueSql("(getdate())");
-            entity.Property(e => e.DeviceId).HasColumnName("DeviceID");
-            entity.Property(e => e.ReporterId).HasColumnName("ReporterID");
-            entity.Property(e => e.Severity).HasMaxLength(50);
-            entity.Property(e => e.Site).HasMaxLength(100);
-            entity.Property(e => e.Status)
-                .HasMaxLength(100)
-                .HasDefaultValue("Đang theo dõi");
-
-            entity.HasOne(d => d.Device).WithMany(p => p.IncidentReports)
-                .HasForeignKey(d => d.DeviceId)
-                .HasConstraintName("FK_Incident_Device");
-
-            entity.HasOne(d => d.Reporter).WithMany(p => p.IncidentReports)
-                .HasForeignKey(d => d.ReporterId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Incident_Reporter");
         });
 
         modelBuilder.Entity<Location>(entity =>
@@ -283,23 +219,6 @@ public partial class WebAppManageContext : DbContext
                 .HasConstraintName("FK_NetworkConfig_VLAN");
         });
 
-        modelBuilder.Entity<Notification>(entity =>
-        {
-            entity.HasKey(e => e.NotificationId).HasName("PK__Notifica__20CF2E328C47D174");
-
-            entity.Property(e => e.NotificationId).HasColumnName("NotificationID");
-            entity.Property(e => e.AccountId).HasColumnName("AccountID");
-            entity.Property(e => e.ActionLink).HasMaxLength(200);
-            entity.Property(e => e.CreatedDate).HasDefaultValueSql("(getdate())");
-            entity.Property(e => e.IsRead).HasDefaultValue(false);
-            entity.Property(e => e.Title).HasMaxLength(200);
-
-            entity.HasOne(d => d.Account).WithMany(p => p.Notifications)
-                .HasForeignKey(d => d.AccountId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Notification_Account");
-        });
-
         modelBuilder.Entity<Port>(entity =>
         {
             entity.HasKey(e => e.PortId).HasName("PK__Ports__D859BFAF8F0882F7");
@@ -337,43 +256,6 @@ public partial class WebAppManageContext : DbContext
 
             entity.Property(e => e.RoleId).HasColumnName("RoleID");
             entity.Property(e => e.RoleName).HasMaxLength(50);
-        });
-
-        modelBuilder.Entity<ShiftHandover>(entity =>
-        {
-            entity.HasKey(e => e.HandoverId).HasName("PK__ShiftHan__DB2A1F61E8784629");
-
-            entity.Property(e => e.HandoverId).HasColumnName("HandoverID");
-            entity.Property(e => e.CreatedDate).HasDefaultValueSql("(getdate())");
-            entity.Property(e => e.FromAccountId).HasColumnName("FromAccountID");
-            entity.Property(e => e.NetworkStatus)
-                .HasMaxLength(50)
-                .HasDefaultValue("Bình thường");
-            entity.Property(e => e.PowerCoolingStatus)
-                .HasMaxLength(50)
-                .HasDefaultValue("Bình thường");
-            entity.Property(e => e.ServerStatus)
-                .HasMaxLength(50)
-                .HasDefaultValue("Bình thường");
-            entity.Property(e => e.ShiftType).HasMaxLength(50);
-            entity.Property(e => e.Site).HasMaxLength(100);
-            entity.Property(e => e.SoftwareStatus)
-                .HasMaxLength(50)
-                .HasDefaultValue("Bình thường");
-            entity.Property(e => e.StorageStatus)
-                .HasMaxLength(50)
-                .HasDefaultValue("Bình thường");
-            entity.Property(e => e.ToAccountId).HasColumnName("ToAccountID");
-
-            entity.HasOne(d => d.FromAccount).WithMany(p => p.ShiftHandoverFromAccounts)
-                .HasForeignKey(d => d.FromAccountId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Handover_FromAccount");
-
-            entity.HasOne(d => d.ToAccount).WithMany(p => p.ShiftHandoverToAccounts)
-                .HasForeignKey(d => d.ToAccountId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Handover_ToAccount");
         });
 
         modelBuilder.Entity<Vlan>(entity =>

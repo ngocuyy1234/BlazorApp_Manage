@@ -1,13 +1,16 @@
-﻿
-
-@inherits LayoutComponentBase
+﻿@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.Authorization
 @using BlazorApp_Manage.Auth
 @using BlazorApp_Manage.Data
 @using Microsoft.EntityFrameworkCore
+@using HeThongNIM.Chuong
+
+@* --- THÊM 2 DÒNG NÀY ĐỂ ÉP NHẬN DIỆN COMPONENT CHUÔNG --- *@
+@using BlazorApp_Manage.Components.Layout
+@using BlazorApp_Manage.Components.Layout
+
 @inject NavigationManager nav
 @inject AuthenticationStateProvider AuthStateProvider
-@* 1. Tiêm DbFactory để ghi log vào SQL *@
 @inject IDbContextFactory<WebAppManageContext> DbFactory
 
 <div class="page">
@@ -16,9 +19,8 @@
     </div>
 
     <main>
-        <!-- thanh tim kim -->
-        <div class="top-row px-4 d-flex justify-content-between align-items-center">
-
+        <div class="top-row px-4 d-flex align-items-center">
+    
             <div class="input-group" style="width: 300px;">
                 <input type="text"
                        class="form-control"
@@ -31,21 +33,25 @@
                 </button>
             </div>
 
-            <!-- login -->
-            <AuthorizeView>
-                <Authorized Context="authContext">
-                    <span class="fw-bold text-primary">
-                        👤 Chào, @authContext.User.Identity?.Name
-                    </span>
-                    <button class="btn btn-sm btn-danger ms-2" @onclick="HandleLogout">Đăng xuất</button>
-                </Authorized>
-                <NotAuthorized>
-                    <NavLink class="btn btn-warning fw-bold" href="/login">🔐 Đăng nhập</NavLink>
-                </NotAuthorized>
-            </AuthorizeView>
-        </div>
+            <div class="ms-auto d-flex align-items-center">
+                
+                <div class="me-4" style="z-index: 1050; display: block; position: relative;">
+                    <NotificationBell />
+                </div>
 
-        <!-- xem log doi voi admin -->
+                <AuthorizeView>
+                    <Authorized Context="authContext">
+                        <span class="fw-bold text-primary border-start ps-3">
+                            👤 Chào, @authContext.User.Identity?.Name
+                        </span>
+                        <button class="btn btn-sm btn-danger ms-2" @onclick="HandleLogout">Đăng xuất</button>
+                    </Authorized>
+                    <NotAuthorized>
+                        <NavLink class="btn btn-warning fw-bold" href="/login">🔐 Đăng nhập</NavLink>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        </div>
 
         <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
             <nav class="flex-column">
@@ -79,10 +85,11 @@
                 </AuthorizeView>
             </nav>
         </div>
+
         <article class="content px-4">
             @Body
         </article>
-        <!--Footer-->
+
         <footer class="bg-light pt-5 pb-2 border-top mt-5">
             <div class="container-fluid px-4">
                 <div class="row g-4">
@@ -140,7 +147,6 @@
                 </div>
             </div>
         </footer>
-
     </main>
 </div>
 
@@ -169,10 +175,8 @@
         }
     }
 
-    // Hàm xử lý đăng xuất đã được thêm Ghi Log
     private async Task HandleLogout()
     {
-        // 2. Lấy thông tin User hiện tại TRƯỚC khi logout
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
 
@@ -182,13 +186,10 @@
             {
                 var username = user.Identity.Name;
                 using var context = await DbFactory.CreateDbContextAsync();
-
-                // Tìm Account dựa trên Username để lấy ID
                 var account = await context.Accounts.FirstOrDefaultAsync(a => a.Username == username);
 
                 if (account != null)
                 {
-                    // 3. Ghi log "LOGOUT" vào Database
                     context.ActionLogs.Add(new ActionLog
                     {
                         AccountId = account.AccountId,
@@ -197,7 +198,6 @@
                         LogTime = DateTime.Now
                     });
                     await context.SaveChangesAsync();
-                    Console.WriteLine($"[LOG - Logout]: Đã ghi log cho {username}");
                 }
             }
             catch (Exception ex)
@@ -206,10 +206,8 @@
             }
         }
 
-        // 4. Xóa sạch Session và quay về trang Login
         var customAuthStateProvider = (CustomAuthStateProvider)AuthStateProvider;
         await customAuthStateProvider.UpdateAuthenticationState(null);
         nav.NavigateTo("/login", forceLoad: true);
     }
-
 }

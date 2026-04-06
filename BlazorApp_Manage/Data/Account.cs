@@ -25,5 +25,17 @@ public partial class Account
 
     public virtual ICollection<ActionLog> ActionLogs { get; set; } = new List<ActionLog>();
 
+    public virtual ICollection<DutySchedule> DutyScheduleAccounts { get; set; } = new List<DutySchedule>();
+
+    public virtual ICollection<DutySchedule> DutyScheduleCreatedByNavigations { get; set; } = new List<DutySchedule>();
+
+    public virtual ICollection<IncidentReport> IncidentReports { get; set; } = new List<IncidentReport>();
+
+    public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+
     public virtual Role Role { get; set; } = null!;
+
+    public virtual ICollection<ShiftHandover> ShiftHandoverFromAccounts { get; set; } = new List<ShiftHandover>();
+
+    public virtual ICollection<ShiftHandover> ShiftHandoverToAccounts { get; set; } = new List<ShiftHandover>();
 }

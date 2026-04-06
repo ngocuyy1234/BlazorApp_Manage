@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace BlazorApp_Manage.Data;
+namespace BlazorApp_Manage.Models;
 
 public partial class ActionLog
 {

@@ -1,0 +1,108 @@
+﻿@using BlazorApp_Manage.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@implements IDisposable
+@inject IDbContextFactory<WebAppManageContext> DbFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@namespace HeThongNIM.Chuong
+
+<div class="dropdown">
+    <button class="btn btn-link position-relative p-1 shadow-none border-0" type="button" data-bs-toggle="dropdown">
+        <span style="font-size: 1.5rem;">🔔</span>
+        @if (unreadCount > 0)
+        {
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                  style="font-size: 0.7rem; z-index: 1000;">
+                @unreadCount
+            </span>
+        }
+    </button>
+
+    <ul class="dropdown-menu dropdown-menu-end shadow-lg" style="width: 280px; z-index: 2000; border-radius: 10px;">
+        <li class="dropdown-header fw-bold border-bottom pb-2">🔔 Thông báo mới</li>
+        @if (unreadNotis.Any())
+        {
+            @foreach (var noti in unreadNotis)
+            {
+                <li>
+                    <button class="dropdown-item small py-2 text-wrap border-bottom" @onclick="() => MarkAsRead(noti)">
+                        <strong>@noti.Title</strong><br />
+                        <span class="text-muted small">@noti.Message</span>
+                    </button>
+                </li>
+            }
+        }
+        else
+        {
+            <li class="p-3 text-center text-muted small">Không có thông báo mới</li>
+        }
+    </ul>
+</div>
+
+@code {
+    private List<Notification> unreadNotis = new();
+    private int unreadCount => unreadNotis.Count;
+    private System.Timers.Timer? _timer;
+    private int currentUserId = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity is { IsAuthenticated: true })
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var account = await context.Accounts
+                .FirstOrDefaultAsync(a => a.Username == user.Identity.Name);
+
+            if (account != null)
+            {
+                currentUserId = account.AccountId;
+            }
+        }
+
+        await LoadNotifications();
+
+        _timer = new System.Timers.Timer(5000); // 5 giây quét 1 lần
+        _timer.Elapsed += async (s, e) => await LoadNotifications();
+        _timer.AutoReset = true;
+        _timer.Enabled = true;
+    }
+
+    private async Task LoadNotifications()
+    {
+        try
+        {
+            if (currentUserId == 0) return;
+
+            using var context = await DbFactory.CreateDbContextAsync();
+            var freshNotis = await context.Notifications
+                .Where(n => n.AccountId == currentUserId && n.IsRead == false)
+                .OrderByDescending(n => n.CreatedDate)
+                .ToListAsync();
+
+            if (freshNotis.Count != unreadNotis.Count)
+            {
+                unreadNotis = freshNotis;
+                // PHẢI dùng InvokeAsync để cập nhật giao diện khi Timer chạy ngầm
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch { }
+    }
+
+    private async Task MarkAsRead(Notification noti)
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        var dbNoti = await context.Notifications.FindAsync(noti.NotificationId);
+        if (dbNoti != null)
+        {
+            dbNoti.IsRead = true;
+            await context.SaveChangesAsync();
+            await LoadNotifications();
+        }
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

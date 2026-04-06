@@ -1,0 +1,325 @@
+﻿@page "/schedules"
+@using BlazorApp_Manage.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* 1. KHÓA BẢO VỆ: Chỉ những ai đã đăng nhập mới được vào trang này *@
+@attribute [Authorize]
+
+@inject IDbContextFactory<WebAppManageContext> DbFactory
+@inject IJSRuntime Js
+@inject AuthenticationStateProvider AuthStateProvider
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-primary mb-0"><i class="bi bi-calendar-week"></i> Quản lý Lịch Trực</h3>
+            <p class="text-muted small">Phân công nhân sự trực Data Center</p>
+        </div>
+
+        @* 2. PHÂN QUYỀN GIAO DIỆN: Chỉ Admin mới thấy nút Thêm *@
+        @if (isAdmin)
+        {
+            <button class="btn btn-primary shadow-sm" @onclick="() => OpenModal()">
+                <i class="bi bi-plus-circle me-2"></i>Phân công lịch mới
+            </button>
+        }
+    </div>
+
+    @if (schedules == null)
+    {
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else
+    {
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="px-4">Ngày trực</th>
+                            <th>Ca trực</th>
+                            <th>Vị trí (Site)</th>
+                            <th>Nhân sự phụ trách</th>
+                            <th>Ngày phân công</th>
+
+                            @* Chỉ Admin mới thấy cột thao tác *@
+                            @if (isAdmin)
+                            {
+                                <th class="text-center">Thao tác</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!schedules.Any())
+                        {
+                            <tr><td colspan="6" class="text-center py-4 text-muted">Chưa có lịch trực nào được phân công.</td></tr>
+                        }
+                        @foreach (var item in schedules)
+                        {
+                            <tr>
+                                <td class="px-4 fw-bold">@item.ShiftDate.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    <span class="badge @(item.ShiftType == "Ca Ngày" ? "bg-warning text-dark" : "bg-dark")">
+                                        <i class="bi @(item.ShiftType == "Ca Ngày" ? "bi-brightness-high" : "bi-moon-stars") me-1"></i>@item.ShiftType
+                                    </span>
+                                </td>
+                                <td><span class="badge bg-secondary">@item.Site</span></td>
+                                <td class="text-primary fw-medium"><i class="bi bi-person-fill me-2"></i>@(item.Account?.FullName ?? "N/A")</td>
+                                <td class="small text-muted">@(item.CreatedDate?.ToString("dd/MM/yyyy HH:mm"))</td>
+
+                                @* Nút Xóa chỉ dành cho Admin *@
+                                @if (isAdmin)
+                                {
+                                    <button class="btn btn-sm btn-outline-primary me-2" title="Chỉnh sửa" @onclick="() => OpenEditModal(item)">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+
+                                    <button class="btn btn-sm btn-outline-danger" title="Xóa" @onclick="() => DeleteSchedule(item.ScheduleId)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@* MODAL PHÂN CÔNG LỊCH TRỰC (GIỮ NGUYÊN HTML NHƯ BẢN CŨ CỦA BẠN) *@
+@if (showModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); z-index: 1050;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg text-dark">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi @(isEditMode ? "bi-pencil-square" : "bi-calendar-plus") me-2"></i>
+                        @(isEditMode ? "Cập nhật lịch trực" : "Phân công lịch trực")
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-bold small text-uppercase">Ngày trực</label>
+                            <input type="date" class="form-control shadow-sm" @bind="currentSchedule.ShiftDate" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-uppercase">Ca trực</label>
+                            <select class="form-select shadow-sm" @bind="currentSchedule.ShiftType">
+                                <option value="Ca Ngày">Ca Ngày</option>
+                                <option value="Ca Đêm">Ca Đêm</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-uppercase">Vị trí (Site)</label>
+                            <select class="form-select shadow-sm" @bind="currentSchedule.Site">
+                                <option value="Mỹ Tho">Site Mỹ Tho</option>
+                                <option value="Cao Lãnh">Site Cao Lãnh</option>
+                            </select>
+                        </div>
+                        <div class="col-12 mt-3">
+                            <label class="form-label fw-bold small text-uppercase text-primary">Chọn nhân sự trực</label>
+                            <select class="form-select border-primary shadow-sm" @bind="currentSchedule.AccountId">
+                                <option value="0">-- Chọn nhân viên --</option>
+                                @foreach (var acc in accounts)
+                                {
+                                    <option value="@acc.AccountId">@acc.FullName (@acc.Username)</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button class="btn btn-secondary px-4" @onclick="CloseModal">Hủy</button>
+                    <button class="btn btn-primary px-4" @onclick="SaveSchedule">Phân công</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<DutySchedule> schedules;
+    private List<Account> accounts = new();
+    private DutySchedule currentSchedule = new();
+    private bool showModal = false;
+    private bool isEditMode = false;
+
+    // Biến phân quyền
+    private bool isAdmin = false;
+    private int currentUserId = 1; // Mặc định là 1 (tránh lỗi null). Sẽ lấy ID thật khi có trang Login.
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 3. KIỂM TRA QUYỀN ĐĂNG NHẬP
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity != null && user.Identity.IsAuthenticated)
+        {
+            // Kiểm tra xem User này có phải là Admin không
+            isAdmin = user.IsInRole("Admin");
+
+            // Tìm ID của user đang đăng nhập (Thường được lưu trong Token/Cookie)
+            var idClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (idClaim != null && int.TryParse(idClaim.Value, out int uid))
+            {
+                currentUserId = uid;
+            }
+        }
+        else
+        {
+            // Nếu dùng [Authorize] ở trên cùng thì dòng này hiếm khi chạy tới,
+            // nhưng tui vẫn để đây dự phòng cho hệ thống chưa cài Authentication chặn ngoài.
+            isAdmin = true; // Tạm thời ép cứng bằng true để bạn test UI, khi làm xong trang Login thì bỏ đi.
+        }
+
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        schedules = await context.DutySchedules
+            .Include(s => s.Account)
+            .AsNoTracking()
+            .OrderByDescending(s => s.ShiftDate)
+            .ToListAsync();
+
+        accounts = await context.Accounts
+            .Where(a => a.IsActive == true)
+            .AsNoTracking()
+            .ToListAsync();
+    }
+    private void OpenEditModal(DutySchedule schedule)
+    {
+        isEditMode = true;
+        // Tạo bản sao để tránh việc sửa trực tiếp trên bảng khi chưa bấm Lưu
+        currentSchedule = new DutySchedule
+        {
+            ScheduleId = schedule.ScheduleId,
+            ShiftDate = schedule.ShiftDate,
+            ShiftType = schedule.ShiftType,
+            Site = schedule.Site,
+            AccountId = schedule.AccountId,
+            CreatedBy = schedule.CreatedBy,
+            CreatedDate = schedule.CreatedDate
+        };
+        showModal = true;
+    }
+    private void OpenModal()
+    {
+        isEditMode = false; // Reset về thêm mới
+        currentSchedule = new DutySchedule
+        {
+            ShiftDate = DateOnly.FromDateTime(DateTime.Today.AddDays(1)),
+            ShiftType = "Ca Ngày",
+            Site = "Mỹ Tho",
+            AccountId = 0
+        };
+        showModal = true;
+    }
+
+    private void CloseModal() => showModal = false;
+    private async Task SaveSchedule()
+    {
+        if (currentSchedule.AccountId == 0)
+        {
+            await Js.InvokeVoidAsync("alert", "Vui lòng chọn nhân sự!");
+            return;
+        }
+
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            currentSchedule.Account = null;
+
+            string notiTitle = "";
+            string notiMessage = "";
+
+            if (isEditMode)
+            {
+                // 1. CHẾ ĐỘ CẬP NHẬT
+                context.DutySchedules.Update(currentSchedule);
+
+                // Ghi Log Chỉnh sửa
+                context.ActionLogs.Add(new ActionLog
+                {
+                    AccountId = currentUserId, // ID Admin đang thực hiện
+                    ActionType = "EDIT_SCHEDULE",
+                    Description = $"Sửa lịch trực ID {currentSchedule.ScheduleId} thành: {currentSchedule.ShiftType} ngày {currentSchedule.ShiftDate}",
+                    LogTime = DateTime.Now
+                });
+
+                notiTitle = "Thay đổi lịch trực";
+                notiMessage = $"Lịch trực ngày {currentSchedule.ShiftDate:dd/MM} của bạn đã được thay đổi thành {currentSchedule.ShiftType} tại {currentSchedule.Site}.";
+            }
+            else
+            {
+                // 2. CHẾ ĐỘ THÊM MỚI
+                currentSchedule.CreatedBy = currentUserId;
+                currentSchedule.CreatedDate = DateTime.Now;
+                context.DutySchedules.Add(currentSchedule);
+
+                notiTitle = "Lịch trực mới";
+                notiMessage = $"Bạn có lịch trực mới vào ngày {currentSchedule.ShiftDate:dd/MM/yyyy} ({currentSchedule.ShiftType}) tại {currentSchedule.Site}.";
+            }
+
+            // --- ĐOẠN QUAN TRỌNG: TẠO THÔNG BÁO ĐỂ CHUÔNG HIỆN SỐ +1 ---
+            // Đoạn này sẽ lưu vào bảng Notifications, cái chuông của User sẽ tự quét thấy IsRead = false và +1
+            context.Notifications.Add(new Notification
+            {
+                AccountId = currentSchedule.AccountId, // Gửi đích danh cho User được phân lịch
+                Title = notiTitle,
+                Message = notiMessage,
+                IsRead = false, // Quan trọng: Để false thì chuông mới hiện số đỏ
+                CreatedDate = DateTime.Now,
+                ActionLink = "/schedules"
+            });
+
+            // Lưu tất cả thay đổi (Lịch trực + Log + Thông báo) vào DB trong 1 lần gửi
+            await context.SaveChangesAsync();
+
+            await Js.InvokeVoidAsync("alert", isEditMode ? "Cập nhật thành công!" : "Phân công thành công!");
+
+            showModal = false;
+            isEditMode = false;
+            await LoadData(); // Tải lại bảng lịch trực
+        }
+        catch (Exception ex)
+        {
+            var errorMsg = ex.InnerException?.Message ?? ex.Message;
+            await Js.InvokeVoidAsync("alert", "Lỗi: " + errorMsg);
+        }
+    }
+    private async Task DeleteSchedule(int id)
+    {
+        if (await Js.InvokeAsync<bool>("confirm", "Bạn có chắc muốn xóa lịch trực này không?"))
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var schedule = await context.DutySchedules.FindAsync(id);
+            if (schedule != null)
+            {
+                // GHI NHẬT KÝ (LOG) VỤ XÓA
+                context.ActionLogs.Add(new ActionLog
+                {
+                    AccountId = currentUserId,
+                    ActionType = "DELETE_SCHEDULE",
+                    Description = $"Xóa lịch trực ngày {schedule.ShiftDate} của tài khoản ID {schedule.AccountId}",
+                    LogTime = DateTime.Now
+                });
+
+                context.DutySchedules.Remove(schedule);
+                await context.SaveChangesAsync();
+                await LoadData();
+            }
+        }
+    }
+
+
+}

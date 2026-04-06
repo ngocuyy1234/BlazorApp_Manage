@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace BlazorApp_Manage.Data;
+namespace BlazorApp_Manage.Models;
 
 public partial class Device
 {
@@ -27,41 +27,17 @@ public partial class Device
 
     public DateTime? CreatedDate { get; set; }
 
-    public bool? IsVirtual { get; set; }
-
-    public int? ParentDeviceId { get; set; }
-
-    public int? CpuCores { get; set; }
-
-    public int? RamGb { get; set; }
-
-    public int? StorageGb { get; set; }
-
-    public int? UplinkDeviceId { get; set; }
-
-    public string? UplinkPort { get; set; }
-
     public virtual ICollection<ActionLog> ActionLogs { get; set; } = new List<ActionLog>();
 
     public virtual DeviceType DeviceType { get; set; } = null!;
 
     public virtual ICollection<DeviceVlan> DeviceVlans { get; set; } = new List<DeviceVlan>();
 
-    public virtual ICollection<IncidentReport> IncidentReports { get; set; } = new List<IncidentReport>();
-
-    public virtual ICollection<Device> InverseParentDevice { get; set; } = new List<Device>();
-
-    public virtual ICollection<Device> InverseUplinkDevice { get; set; } = new List<Device>();
-
     public virtual Location? Location { get; set; }
 
     public virtual NetworkConfig? NetworkConfig { get; set; }
 
-    public virtual Device? ParentDevice { get; set; }
-
     public virtual ICollection<Port> PortConnectedToDevices { get; set; } = new List<Port>();
 
     public virtual ICollection<Port> PortDevices { get; set; } = new List<Port>();
-
-    public virtual Device? UplinkDevice { get; set; }
 }

@@ -3,8 +3,6 @@
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
-
-@* LỚP BẢO VỆ 1: Chỉ Admin và Technician mới được phép vào trang này *@
 @attribute [Authorize(Roles = "Admin,Technician")]
 
 @inject IDbContextFactory<WebAppManageContext> DbFactory
@@ -218,9 +216,7 @@
 }
 
 @code {
-    // ===============================================
-    // PHẦN CODE CŨ: QUẢN LÝ VLAN
-    // ===============================================
+
     private List<Vlan> vlans;
     private Vlan currentVlan = new();
     private bool showModal = false;
@@ -303,16 +299,34 @@
 
             using var context = await DbFactory.CreateDbContextAsync();
 
+            string actionTypeLog = ""; // Biến tạm để ghi log
+            string descLog = "";       // Biến tạm để ghi log
+
             if (currentVlan.Vlanid == 0)
             {
                 int maxId = await context.Vlans.MaxAsync(v => (int?)v.Vlanid) ?? 0;
                 currentVlan.Vlanid = (maxId == 0) ? 10 : maxId + 10;
                 context.Vlans.Add(currentVlan);
+
+                actionTypeLog = "CREATE_VLAN";
+                descLog = $"Tạo VLAN mới: {currentVlan.Vlanname} (Network: {currentVlan.NetworkAddress}/{currentVlan.Cidr})";
             }
             else
             {
                 context.Vlans.Update(currentVlan);
+
+                actionTypeLog = "UPDATE_VLAN";
+                descLog = $"Cập nhật VLAN: {currentVlan.Vlanid} - {currentVlan.Vlanname} (Gateway đổi thành: {currentVlan.GatewayIp})";
             }
+
+            // --- 1. THÊM LOG CHO HÀM LƯU VLAN ---
+            context.ActionLogs.Add(new ActionLog
+            {
+                AccountId = 1, // Tạm thời để cứng ID Admin
+                ActionType = actionTypeLog,
+                Description = descLog,
+                LogTime = DateTime.Now
+            });
 
             await context.SaveChangesAsync();
 
@@ -338,6 +352,16 @@
                 if (vlanToDelete != null)
                 {
                     context.Vlans.Remove(vlanToDelete);
+
+                    // --- 2. THÊM LOG CHO HÀM XÓA VLAN ---
+                    context.ActionLogs.Add(new ActionLog
+                    {
+                        AccountId = 1, // Tạm thời để cứng ID Admin
+                        ActionType = "DELETE_VLAN",
+                        Description = $"Đã xóa VLAN: {vlanToDelete.Vlanid} - {vlanToDelete.Vlanname}",
+                        LogTime = DateTime.Now
+                    });
+
                     await context.SaveChangesAsync();
                     await LoadData();
                 }
@@ -469,7 +493,7 @@
             newDevice.Macaddress = "TEMP-" + Guid.NewGuid().ToString().Substring(0, 8).ToUpper();
 
             context.Devices.Add(newDevice);
-            await context.SaveChangesAsync();
+            await context.SaveChangesAsync(); // Lưu để lấy DeviceId mới
 
             // --- BƯỚC 2: XỬ LÝ LƯU CẤU HÌNH MẠNG (NETWORK CONFIG) ---
             newNetConfig.DeviceId = newDevice.DeviceId;
@@ -481,7 +505,18 @@
             if (string.IsNullOrEmpty(newNetConfig.PrimaryDns)) newNetConfig.PrimaryDns = "8.8.8.8";
 
             context.NetworkConfigs.Add(newNetConfig);
-            await context.SaveChangesAsync();
+
+            // --- 3. THÊM LOG CHO HÀM THÊM THIẾT BỊ NHANH ---
+            context.ActionLogs.Add(new ActionLog
+            {
+                AccountId = 1, // Tạm thời để cứng ID Admin
+                ActionType = "ADD_DEVICE_TO_VLAN",
+                Description = $"Cấp phát thiết bị '{newDevice.DeviceName}' vào {selectedVlanForDevice.Vlanname} với IP: {newNetConfig.Ipaddress}",
+                DeviceId = newDevice.DeviceId, // Gán trực tiếp thiết bị vừa tạo vào log
+                LogTime = DateTime.Now
+            });
+
+            await context.SaveChangesAsync(); // Lưu NetworkConfig và Log cùng lúc
 
             await Js.InvokeVoidAsync("alert", $"Đã thêm {newDevice.DeviceName} thành công với IP {newNetConfig.Ipaddress}!");
             CloseAddDeviceModal();
