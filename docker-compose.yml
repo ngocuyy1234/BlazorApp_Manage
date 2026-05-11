@@ -1,0 +1,11 @@
+services:
+  ansible-engine:
+    build:
+      context: ./doan_ansible  # Trỏ vào thư mục chứa Dockerfile của bạn
+    container_name: ansible_engine
+    volumes:
+      - ./doan_ansible:/data    # Đồng bộ code vào thư mục /data như bạn thiết lập
+    networks:
+      - nim-net
+    tty: true
+    stdin_open: true

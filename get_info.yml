@@ -1,0 +1,28 @@
+- name: Agent thu thap thong tin Asset Windows
+  hosts: windows
+  gather_facts: yes
+  tasks:
+    - name: 1. Quet danh sach phan mem tu Registry Windows
+      win_shell: |
+        $apps = Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | 
+                Where-Object { $_.DisplayName -ne $null } | 
+                Select-Object @{n='name';e={$_.DisplayName}}, @{n='version';e={$_.DisplayVersion}}
+        $apps | ConvertTo-Json
+      register: win_apps
+
+    - name: 2. Xuat du lieu sang JSON (Khop cau truc Ubuntu)
+      win_copy:
+        content: |
+          {
+            "nodename": "{{ ansible_facts.hostname }}",
+            "os": "Windows Server",
+            "memtotal_mb": {{ ansible_facts.memtotal_mb | default(0) }},
+            "uptime_seconds": {{ ansible_facts.uptime_seconds | default(0) }},
+            "default_ipv4": { 
+              "address": "{{ ansible_facts.ip_addresses[0] | default('0.0.0.0') }}" 
+            },
+            "os_assets": {{ win_apps.stdout | default('[]') }},
+            "docker_ram_details": [],
+            "container_assets": []
+          }
+        dest: 'D:\TSNN_KTCN\Doanh Ngiep\BlazorApp_Manage\BlazorApp_Manage\wwwroot\assets_data.json'
