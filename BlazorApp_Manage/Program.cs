@@ -1,11 +1,12 @@
 
 
+using BlazorApp_Manage.Auth; // ?? s? d?ng CustomAuthStateProvider
 using BlazorApp_Manage.Components;
 using BlazorApp_Manage.Data; // ?? s? d?ng WebAppManageContext
 using BlazorApp_Manage.Services; // ?? s? d?ng AuthService
-using BlazorApp_Manage.Auth; // ?? s? d?ng CustomAuthStateProvider
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.EntityFrameworkCore;
+using BlazorApp_Manage.Services;
 
 namespace BlazorApp_Manage
 {
@@ -45,6 +46,13 @@ namespace BlazorApp_Manage
             // Kích ho?t tr?ng thái Cascading
             builder.Services.AddCascadingAuthenticationState();
 
+            builder.Services.AddScoped<AnsibleService>();
+
+            //builder.Services.AddScoped(sp => new HttpClient());
+            builder.Services.AddScoped(sp => new HttpClient
+            {
+                BaseAddress = new Uri("http://localhost:5009/")
+            });
 
             var app = builder.Build();
 

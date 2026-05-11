@@ -1,0 +1,76 @@
+﻿@* @page "/ansible"
+@using YourProjectName.Services 
+@inject AnsibleService AnsibleService
+
+<PageTitle>Cấu hình Router</PageTitle>
+
+<h3>Quản lý Router tự động</h3>
+
+<div class="card p-3">
+    <button class="btn btn-primary w-25" @onclick="ExecuteAnsible">
+        <i class="bi bi-play-fill"></i> Check Version ngay
+    </button>
+
+    <div class="mt-3">
+        <h5>Kết quả thực thi:</h5>
+        <pre class="bg-dark text-success p-3 border rounded" style="min-height: 200px; overflow-y: auto;">
+            @ansibleLog
+        </pre>
+    </div>
+</div>
+
+@code {
+    private string ansibleLog = "Hệ thống sẵn sàng. Nhấn nút để bắt đầu quét...";
+
+    private async Task ExecuteAnsible()
+    {
+        ansibleLog = "Đang kết nối tới Router GNS3 qua Ansible, vui lòng chờ...";
+        try
+        {
+            ansibleLog = await AnsibleService.RunAnsiblePlaybook();
+        }
+        catch (Exception ex)
+        {
+            ansibleLog = $"Lỗi kết nối: {ex.Message}";
+        }
+    }
+}
+ *@
+
+@page "/ansible"
+@using BlazorApp_Manage.Services
+@inject AnsibleService AnsibleService
+
+<PageTitle>Cấu hình Router</PageTitle>
+
+<h3>Quản lý Router tự động</h3>
+
+<div class="card p-3">
+    <button class="btn btn-primary w-25" @onclick="ExecuteAnsible">
+        <i class="bi bi-play-fill"></i> Check Version ngay
+    </button>
+
+    <div class="mt-3">
+        <h5>Kết quả thực thi:</h5>
+        <pre class="bg-dark text-success p-3 border rounded" style="min-height: 200px; overflow-y: auto;">
+            @ansibleLog
+        </pre>
+    </div>
+</div>
+
+@code {
+    private string ansibleLog = "Hệ thống sẵn sàng. Nhấn nút để bắt đầu quét...";
+
+    private async Task ExecuteAnsible()
+    {
+        ansibleLog = "Đang kết nối tới Router GNS3 qua Ansible, vui lòng chờ...";
+        try
+        {
+            ansibleLog = await AnsibleService.RunAnsiblePlaybook();
+        }
+        catch (Exception ex)
+        {
+            ansibleLog = $"Lỗi kết nối: {ex.Message}";
+        }
+    }
+}

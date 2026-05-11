@@ -1,0 +1,226 @@
+﻿@page "/monitor"
+@using System.Text.Json.Serialization
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<div class="container-fluid mt-3">
+    @* --- PHẦN THÔNG TIN HẠ TẦNG --- *@
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-shield-shaded"></i> THÔNG TIN HỆ THỐNG: @(fullData?.NodeName)</span>
+
+                    @* BỔ SUNG: Nút làm mới dữ liệu *@
+                    <button class="btn btn-sm btn-light fw-bold" @onclick="RefreshData" disabled="@isloading">
+                        @if (isloading)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                        }
+                        else
+                        {
+
+                            <i class="bi bi-arrow-clockwise"></i>
+                        }
+ Làm mới
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center mb-3">
+                        <div class="col-3 border-end"><h6>Hệ điều hành</h6><p class="text-primary fw-bold">@(fullData?.OS ?? "N/A")</p></div>
+                        <div class="col-3 border-end"><h6>Địa chỉ IP</h6><p class="text-primary fw-bold">@(fullData?.DefaultIp ?? "0.0.0.0")</p></div>
+                        <div class="col-3 border-end"><h6>Tổng RAM</h6><p class="text-primary fw-bold">@(fullData?.MemTotal) MB</p></div>
+                        <div class="col-3"><h6>Uptime</h6><p class="text-primary fw-bold">@((fullData?.Uptime ?? 0) / 3600) Giờ</p></div>
+                    </div>
+
+                    @* BỔ SUNG: Thanh phân bổ tài nguyên cho Server ảo *@
+                    <h6>Phân bổ tài nguyên thực tế (RAM):</h6>
+                    <div class="progress" style="height: 30px;">
+                        <div class="progress-bar bg-secondary" style="width: 40%">Hệ thống (OS)</div>
+                        @if (fullData?.DockerRamDetails != null)
+                        {
+                            @foreach (var ram in fullData.DockerRamDetails)
+                            {
+                                <div class="progress-bar bg-info border-start" style="width: 20%">@ram</div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        @* --- PHẦN DANH SÁCH PHẦN MỀM --- *@
+        <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-dark text-white"> Danh sách phần mềm quét được (@(fullData?.OsAssets?.Count ?? 0) Assets) </div>
+                <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>Tên phần mềm (Asset)</th>
+                                <th>Phiên bản</th>
+                                <th class="text-center">Trạng thái CVE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (ProcessedAssets != null && ProcessedAssets.Any())
+                            {
+                                @foreach (var asset in ProcessedAssets)
+                                {
+                                    <tr class="@(asset.IsVulnerable ? "table-danger" : "")">
+                                        <td class="fw-bold">@asset.Name</td>
+                                        <td><span class="badge bg-light text-dark border">@(asset.Version ?? "N/A")</span></td>
+                                        <td class="text-center">
+                                            @if (asset.IsVulnerable)
+                                            {
+                                                <span class="badge bg-danger"><i class="bi bi-bug"></i> @asset.CveID</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-success small"><i class="bi bi-check-circle"></i> An toàn</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr><td colspan="3" class="text-center p-4 text-muted">Đang tải dữ liệu...</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        @* BỔ SUNG: Cột hiển thị Server ảo (Containers) *@
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-warning mb-3">
+                <div class="card-header bg-warning text-dark fw-bold text-center">PHÁT HIỆN LỖ HỔNG</div>
+                <div class="card-body text-center">
+                    <h1 class="display-4 fw-bold text-danger">@VulnerableCount</h1>
+                    <p class="text-muted">Rủi ro cần xử lý</p>
+                </div>
+            </div>
+
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-info text-white fw-bold">SERVER ẢO / CONTAINERS ĐANG CHẠY</div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        @if (fullData?.ContainerAssets != null && fullData.ContainerAssets.Any())
+                        {
+                            @foreach (var container in fullData.ContainerAssets)
+                            {
+                                <li class="list-group-item small"><i class="bi bi-box-seam"></i> @container</li>
+                            }
+                        }
+                        else
+                        {
+                            <li class="list-group-item text-muted">Không có server ảo nào.</li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private FullInfo? fullData;
+    private List<AssetDetail> ProcessedAssets = new();
+    private int VulnerableCount = 0;
+    private bool isloading = false;
+
+    // Cơ sở dữ liệu CVE mẫu để đối soát
+    private readonly List<CVECheck> CveDb = new() {
+        new CVECheck { Name = "Docker Desktop", Version = "4.72.0", CveID = "CVE-2024-DOCKER", Severity = "High" },
+        new CVECheck { Name = "Git", Version = "2.53.0.2", CveID = "CVE-2024-GIT", Severity = "Critical" }
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task RefreshData() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try
+        {
+            isloading = true;
+            fullData = await Http.GetFromJsonAsync<FullInfo>("assets_data.json");
+
+            if (fullData != null)
+            {
+                MatchCve();
+                if (VulnerableCount > 0)
+                {
+                    // Thông báo CVE bằng Alert
+                    await JS.InvokeVoidAsync("alert", $"CẢNH BÁO: Hệ thống phát hiện {VulnerableCount} lỗ hổng bảo mật!");
+                }
+            }
+        }
+        catch (Exception ex) { Console.WriteLine("Lỗi: " + ex.Message); }
+        finally { isloading = false; }
+    }
+
+    private void MatchCve()
+    {
+        ProcessedAssets.Clear();
+        VulnerableCount = 0;
+        if (fullData?.OsAssets == null) return;
+
+        foreach (var asset in fullData.OsAssets)
+        {
+            var bug = CveDb.FirstOrDefault(c =>
+                c.Name.ToLower() == asset.Name.ToLower() &&
+                c.Version == asset.Version);
+
+            var detail = new AssetDetail
+            {
+                Name = asset.Name,
+                Version = asset.Version,
+                IsVulnerable = bug != null,
+                CveID = bug?.CveID ?? "",
+                Severity = bug?.Severity ?? "N/A"
+            };
+            if (detail.IsVulnerable) VulnerableCount++;
+            ProcessedAssets.Add(detail);
+        }
+    }
+
+    // --- GIỮ NGUYÊN CẤU TRÚC CLASS CŨ VÀ BỔ SUNG TRƯỜNG MỚI ---
+    public class FullInfo
+    {
+        [JsonPropertyName("nodename")] public string NodeName { get; set; } = "";
+        [JsonPropertyName("os")] public string OS { get; set; } = "";
+        [JsonPropertyName("memtotal_mb")] public int MemTotal { get; set; }
+        [JsonPropertyName("uptime_seconds")] public int Uptime { get; set; }
+        [JsonPropertyName("default_ipv4")] public IPv4Data DefaultIpv4 { get; set; } = new();
+        public string DefaultIp => DefaultIpv4?.Address ?? "0.0.0.0";
+        [JsonPropertyName("os_assets")] public List<AssetItem> OsAssets { get; set; } = new();
+
+        // Bổ sung các trường để quản lý Server ảo
+        [JsonPropertyName("docker_ram_details")] public List<string> DockerRamDetails { get; set; } = new();
+        [JsonPropertyName("container_assets")] public List<string> ContainerAssets { get; set; } = new();
+    }
+
+    public class IPv4Data { [JsonPropertyName("address")] public string Address { get; set; } = ""; }
+    public class AssetItem { [JsonPropertyName("name")] public string Name { get; set; } = ""; [JsonPropertyName("version")] public string Version { get; set; } = ""; }
+
+    public class AssetDetail
+    {
+        public string Name { get; set; } = "";
+        public string Version { get; set; } = "";
+        public bool IsVulnerable { get; set; }
+        public string CveID { get; set; } = "";
+        public string Severity { get; set; } = "";
+    }
+    public class CVECheck
+    {
+        public string Name { get; set; } = "";
+        public string Version { get; set; } = "";
+        public string CveID { get; set; } = "";
+        public string Severity { get; set; } = "";
+    }
+}
